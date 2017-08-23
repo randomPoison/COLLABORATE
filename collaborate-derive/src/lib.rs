@@ -51,7 +51,23 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
     let mut stub_me_out = false;
 
     let fields = match input.body {
-        Body::Enum(_) => { return Err("`#[derive(ColladaElement)]` does not support enum types")?; }
+        Body::Enum(mut variants) => {
+            let variants = variants.drain(..)
+                .map(|variant| {
+                    let name = variant.ident;
+                    match variant.data {
+                        VariantData::Tuple(mut fields) => {
+                            assert!(fields.len() == 1, "Enum variants may only have a single type");
+                            let innerType = fields.pop().unwrap().ty;
+                            return EnumMemberVariant { name, innerType };
+                        }
+
+                        _ => panic!("Only tuple variants with a single member are supported for enum variants"),
+                    }
+                })
+                .collect();
+            return Ok(ElementConfiguration::EnumMember { variants });
+        }
 
         Body::Struct(VariantData::Struct(fields)) => { fields }
 
@@ -215,17 +231,25 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         }
     }
 
-    Ok(ElementConfiguration {
+    Ok(ElementConfiguration::StructMember(StructMember {
         struct_ident: struct_ident,
         element_name: element_name,
         attributes: attributes,
         children: children,
 
         stub_me_out,
-    })
+    }))
 }
 
-struct ElementConfiguration {
+enum ElementConfiguration {
+    StructMember(StructMember),
+
+    EnumMember {
+        variants: Vec<EnumMemberVariant>,
+    },
+}
+
+struct StructMember {
     struct_ident: Ident,
     element_name: String,
     attributes: Vec<Attribute>,
@@ -233,6 +257,11 @@ struct ElementConfiguration {
 
     /// Temporary flag to allow us to stub out elements until the entire spec is covered.
     stub_me_out: bool,
+}
+
+struct EnumMemberVariant {
+    name: Ident,
+    innerType: Ty,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,7 +316,18 @@ impl ToTokens for ChildOccurrences {
 }
 
 fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
-    let ElementConfiguration { struct_ident, element_name, attributes, children, stub_me_out } = process_derive_input(derive_input)?;
+    match process_derive_input(derive_input)? {
+        ElementConfiguration::StructMember(config) => generate_struct_impl(config),
+        ElementConfiguration::EnumMember { variants } => generate_enum_impl(variants),
+    }
+}
+
+fn generate_enum_impl(variants: Vec<EnumMemberVariant>) -> Result<quote::Tokens, String> {
+    unimplemented!()
+}
+
+fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
+    let StructMember { struct_ident, element_name, attributes, children, stub_me_out } = config;
 
     // Generate declarations for the member variables of the struct.
     // -------------------------------------------------------------
