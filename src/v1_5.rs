@@ -2,7 +2,6 @@ use {AnyUri, DateTime, Extra, Result, Error, ErrorKind, Unit, UpAxis, utils};
 use std::io::Read;
 use utils::*;
 use utils::ChildOccurrences::*;
-use xml::attribute::OwnedAttribute;
 use xml::common::Position;
 use xml::reader::EventReader;
 use xml::reader::XmlEvent::*;
@@ -12,7 +11,7 @@ use xml::reader::XmlEvent::*;
 /// `from_str()` and `read()` just create the `xml::EventReader` and then defer to `parse()`.
 ///
 /// TODO: This is currently publicly exported. That shouldn't happen.
-pub fn parse_collada<R: Read>(mut reader: EventReader<R>, version: String, base: Option<AnyUri>) -> Result<Collada> {
+pub fn collaborate<R: Read>(mut reader: EventReader<R>, version: String, base: Option<AnyUri>) -> Result<Collada> {
     // The next event must be the `<asset>` tag. No text data is allowed, and
     // whitespace/comments aren't emitted.
     let start_element = utils::required_start_element(&mut reader, "COLLADA", "asset")?;
@@ -68,7 +67,7 @@ impl Collada {
     ///
     /// ```
     /// # #![allow(unused_variables)]
-    /// use parse_collada::Collada;
+    /// use collaborate::Collada;
     ///
     /// static DOCUMENT: &'static str = r#"
     ///     <?xml version="1.0" encoding="utf-8"?>
@@ -102,7 +101,7 @@ impl Collada {
     /// ```
     /// # #![allow(unused_variables)]
     /// use std::fs::File;
-    /// use parse_collada::Collada;
+    /// use collaborate::Collada;
     ///
     /// let file = File::open("resources/blender_cube.dae").unwrap();
     /// let collada = Collada::read(file).unwrap();

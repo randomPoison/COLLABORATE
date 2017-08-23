@@ -17,7 +17,7 @@
 //! ```
 //! # #![allow(unused_variables)]
 //! use std::fs::File;
-//! use parse_collada::Collada;
+//! use collaborate::Collada;
 //!
 //! let file = File::open("resources/blender_cube.dae").unwrap();
 //! let collada = Collada::read(file).unwrap();
@@ -60,7 +60,7 @@
 
 pub extern crate chrono;
 #[macro_use]
-extern crate parse_collada_derive;
+extern crate collaborate_derive;
 extern crate xml;
 
 pub use v1_5::*;

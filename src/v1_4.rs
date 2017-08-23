@@ -2,12 +2,11 @@ use {AnyUri, DateTime, Error, ErrorKind, Extra, Result, Unit, UpAxis, utils, v1_
 use std::io::Read;
 use utils::*;
 use utils::ChildOccurrences::*;
-use xml::attribute::OwnedAttribute;
 use xml::common::Position;
 use xml::reader::EventReader;
 use xml::reader::XmlEvent::*;
 
-pub fn parse_collada<R: Read>(
+pub fn collaborate<R: Read>(
     mut reader: EventReader<R>,
     version: String,
     base: Option<AnyUri>

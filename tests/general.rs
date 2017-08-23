@@ -1,6 +1,6 @@
-extern crate parse_collada;
+extern crate collaborate;
 
-use ::parse_collada::*;
+use ::collaborate::*;
 
 #[test]
 fn load_document() {

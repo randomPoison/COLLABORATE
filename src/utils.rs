@@ -237,9 +237,9 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
     };
 
     if version == "1.4.0" || version == "1.4.1" {
-        v1_4::parse_collada(reader, version, base_uri).map(Into::into)
+        v1_4::collaborate(reader, version, base_uri).map(Into::into)
     } else if version == "1.5.0" {
-        v1_5::parse_collada(reader, version, base_uri)
+        v1_5::collaborate(reader, version, base_uri)
     } else {
         Err(Error {
             position: reader.position(),

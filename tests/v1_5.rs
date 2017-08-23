@@ -1,6 +1,6 @@
-extern crate parse_collada;
+extern crate collaborate;
 
-use ::parse_collada::*;
+use ::collaborate::*;
 
 #[test]
 fn collada_asset_minimal() {
@@ -101,7 +101,7 @@ fn collada_missing_asset() {
         position: TextPosition { row: 3, column: 4 },
         kind: ErrorKind::MissingElement {
             parent: "COLLADA".into(),
-            expected: "asset",
+            expected: vec!["asset"],
         },
     };
 
