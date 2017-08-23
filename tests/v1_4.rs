@@ -3,6 +3,14 @@ extern crate collaborate;
 use ::collaborate::*;
 
 #[test]
+fn blender_cube() {
+    static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+
+    let document = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    let _ = Collada::from_str(&*document).unwrap();
+}
+
+#[test]
 fn collada_asset_minimal() {
     static DOCUMENT: &'static str = r#"
     <?xml version="1.0" encoding="utf-8"?>
