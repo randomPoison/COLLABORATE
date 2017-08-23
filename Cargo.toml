@@ -1,0 +1,10 @@
+[package]
+
+name = "collaborate"
+version = "0.1.0"
+authors = ["David LeGare <excaliburhissheath@gmail.com>"]
+
+[dependencies]
+chrono = "0.3"
+collaborate-derive = { path = "./collaborate-derive" }
+xml-rs = "0.3.5"
