@@ -480,42 +480,11 @@ impl ColladaElement for Geometry {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, ColladaElement)]
 pub enum GeometricElement {
     ConvexMesh(ConvexMesh),
     Mesh(Mesh),
     Spline(Spline),
-}
-
-impl ColladaElement for GeometricElement {
-    fn name_test(name: &str) -> bool {
-        ConvexMesh::name_test(name) || Mesh::name_test(name) || Spline::name_test(name)
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<GeometricElement>
-    where
-        R: Read,
-    {
-        if ConvexMesh::name_test(&*element_start.name.local_name) {
-            let element = ConvexMesh::parse_element(reader, element_start)?;
-            Ok(GeometricElement::ConvexMesh(element))
-        } else if Mesh::name_test(&*element_start.name.local_name) {
-            unimplemented!();
-        } else if Spline::name_test(&*element_start.name.local_name) {
-            unimplemented!();
-        } else {
-            panic!("Unexpected group member for `GeometricElement` {}", element_start.name.local_name);
-        }
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        ConvexMesh::add_names(names);
-        Mesh::add_names(names);
-        Spline::add_names(names);
-    }
 }
 
 #[derive(Debug, Clone, ColladaElement)]

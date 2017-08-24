@@ -24,26 +24,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
 fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, String> {
     let ident = input.ident;
 
-    // Process the top-level attributes on the type to find the `#[name = "foo"]` attribute.
-    // -------------------------------------------------------------------------------------
-    let element_name = {
-        let mut element_name = None;
-
-        for attribute in input.attrs {
-            match attribute.value {
-                MetaItem::NameValue(attr_name, Lit::Str(value, _)) => {
-                    if attr_name == "name" {
-                        element_name = Some(value);
-                    }
-                }
-
-                _ => {}
-            }
-        }
-
-        element_name.ok_or(r#"Type must have `#[name = "..."]` attribute when using `#[derive(ColladaElement)]`"#)?
-    };
-
     // Process the body of the type and gather information about attributes and children.
     // ----------------------------------------------------------------------------------
     let mut children = Vec::new();
@@ -77,6 +57,26 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
             stub_me_out = true;
             Vec::new()
         }
+    };
+
+    // Process the top-level attributes on the type to find the `#[name = "foo"]` attribute.
+    // -------------------------------------------------------------------------------------
+    let element_name = {
+        let mut element_name = None;
+
+        for attribute in input.attrs {
+            match attribute.value {
+                MetaItem::NameValue(attr_name, Lit::Str(value, _)) => {
+                    if attr_name == "name" {
+                        element_name = Some(value);
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        element_name.ok_or(r#"Type must have `#[name = "..."]` attribute when using `#[derive(ColladaElement)]`"#)?
     };
 
     for field in fields {
