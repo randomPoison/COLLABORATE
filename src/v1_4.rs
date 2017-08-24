@@ -500,7 +500,8 @@ impl ColladaElement for GeometricElement {
         R: Read,
     {
         if ConvexMesh::name_test(&*element_start.name.local_name) {
-            unimplemented!();
+            let element = ConvexMesh::parse_element(reader, element_start)?;
+            Ok(GeometricElement::ConvexMesh(element))
         } else if Mesh::name_test(&*element_start.name.local_name) {
             unimplemented!();
         } else if Spline::name_test(&*element_start.name.local_name) {

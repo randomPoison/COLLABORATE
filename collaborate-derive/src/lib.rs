@@ -22,7 +22,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 }
 
 fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, String> {
-    let struct_ident = input.ident;
+    let ident = input.ident;
 
     // Process the top-level attributes on the type to find the `#[name = "foo"]` attribute.
     // -------------------------------------------------------------------------------------
@@ -58,15 +58,15 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
                     match variant.data {
                         VariantData::Tuple(mut fields) => {
                             assert!(fields.len() == 1, "Enum variants may only have a single type");
-                            let innerType = fields.pop().unwrap().ty;
-                            return EnumMemberVariant { name, innerType };
+                            let inner_type = fields.pop().unwrap().ty;
+                            return EnumMemberVariant { name, inner_type };
                         }
 
                         _ => panic!("Only tuple variants with a single member are supported for enum variants"),
                     }
                 })
                 .collect();
-            return Ok(ElementConfiguration::EnumMember { variants });
+            return Ok(ElementConfiguration::EnumMember(EnumMember { ident, variants }));
         }
 
         Body::Struct(VariantData::Struct(fields)) => { fields }
@@ -232,7 +232,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
     }
 
     Ok(ElementConfiguration::StructMember(StructMember {
-        struct_ident: struct_ident,
+        ident: ident,
         element_name: element_name,
         attributes: attributes,
         children: children,
@@ -243,14 +243,11 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
 
 enum ElementConfiguration {
     StructMember(StructMember),
-
-    EnumMember {
-        variants: Vec<EnumMemberVariant>,
-    },
+    EnumMember(EnumMember),
 }
 
 struct StructMember {
-    struct_ident: Ident,
+    ident: Ident,
     element_name: String,
     attributes: Vec<Attribute>,
     children: Vec<Child>,
@@ -259,9 +256,14 @@ struct StructMember {
     stub_me_out: bool,
 }
 
+struct EnumMember {
+    ident: Ident,
+    variants: Vec<EnumMemberVariant>,
+}
+
 struct EnumMemberVariant {
     name: Ident,
-    innerType: Ty,
+    inner_type: Ty,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -318,16 +320,77 @@ impl ToTokens for ChildOccurrences {
 fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
     match process_derive_input(derive_input)? {
         ElementConfiguration::StructMember(config) => generate_struct_impl(config),
-        ElementConfiguration::EnumMember { variants } => generate_enum_impl(variants),
+        ElementConfiguration::EnumMember(config) => generate_enum_impl(config),
     }
 }
 
-fn generate_enum_impl(variants: Vec<EnumMemberVariant>) -> Result<quote::Tokens, String> {
-    unimplemented!()
+fn generate_enum_impl(config: EnumMember) -> Result<quote::Tokens, String> {
+    let EnumMember { ident, variants } = config;
+
+    // Convert the list of types `[A, B, C]` to the name test
+    // `A::name_test(name) || B::name_test(name) || C::name_test(name)`
+    let name_test = variants.iter()
+        .map(|variant| &variant.inner_type)
+        .fold(None, |joined, current| {
+            match joined {
+                None => Some(quote! { #current::name_test(name) }),
+                Some(joined) => Some(quote! { #joined || #current::name_test(name) }),
+            }
+        });
+
+    let parse_variants = variants.iter()
+        .fold(None, |joined, current| {
+            let &EnumMemberVariant { ref name, ref inner_type } = current;
+            match joined {
+                None => Some(quote! {
+                    if #inner_type::name_test(&*element_start.name.local_name) {
+                        let element = #inner_type::parse_element(reader, element_start)?;
+                        Ok(#ident::#name(element))
+                    }
+                }),
+
+                Some(joined) => Some(quote! {
+                    #joined
+                    else if #inner_type::name_test(&*element_start.name.local_name) {
+                        let element = #inner_type::parse_element(reader, element_start)?;
+                        Ok(#ident::#name(element))
+                    }
+                }),
+            }
+        });
+
+    let add_names = variants.iter()
+        .map(|variant| &variant.inner_type)
+        .map(|ty| quote! { #ty::add_names(names); });
+
+    Ok(quote! {
+        impl ColladaElement for #ident {
+            fn name_test(name: &str) -> bool {
+                #name_test
+            }
+
+            fn parse_element<R>(
+                reader: &mut ::xml::reader::EventReader<R>,
+                element_start: ::utils::ElementStart,
+            ) -> Result<#ident>
+            where
+                R: ::std::io::Read,
+            {
+                #parse_variants
+                else {
+                    panic!("Unexpected group member for `GeometricElement`: {}", element_start.name.local_name);
+                }
+            }
+
+            fn add_names(names: &mut Vec<&'static str>) {
+                #( #add_names )*
+            }
+        }
+    })
 }
 
 fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
-    let StructMember { struct_ident, element_name, attributes, children, stub_me_out } = config;
+    let StructMember { ident, element_name, attributes, children, stub_me_out } = config;
 
     // Generate declarations for the member variables of the struct.
     // -------------------------------------------------------------
@@ -593,7 +656,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
             });
 
         quote! {
-            Ok(#struct_ident {
+            Ok(#ident {
                 #( #attribs, )*
                 #( #childs, )*
             })
@@ -637,7 +700,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
     // Put all the pieces together.
     // ----------------------------
     Ok(quote! {
-        impl ::utils::ColladaElement for #struct_ident {
+        impl ::utils::ColladaElement for #ident {
             fn name_test(name: &str) -> bool {
                 name == #element_name
             }
