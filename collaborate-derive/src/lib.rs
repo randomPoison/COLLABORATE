@@ -187,7 +187,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         let data_type = match inner_type {
             Ty::Path(None, ref path) => {
                 let segment = path.segments.last().expect("Somehow got an empty path ?_?");
-                if segment.ident.as_ref() == "String" {
+                if segment.ident.as_ref() == "String" || segment.ident.as_ref() == "DateTime" {
                     DataType::TextData(inner_type.clone())
                 } else {
                     if is_text_data {

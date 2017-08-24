@@ -1,9 +1,6 @@
 use {AnyUri, DateTime, Error, ErrorKind, Extra, Result, Unit, UpAxis, utils, v1_5};
-use std::io::Read;
 use utils::*;
-use utils::ChildOccurrences::*;
 use xml::common::Position;
-use xml::reader::EventReader;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "COLLADA"]
@@ -41,22 +38,37 @@ impl Into<v1_5::Collada> for Collada {
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "scene"]
-pub struct Scene;
-
-#[derive(Debug, Clone, PartialEq)]
+#[name = "asset"]
 pub struct Asset {
+    #[child]
     pub contributors: Vec<Contributor>,
+
+    #[child]
     pub created: DateTime,
-    pub keywords: Vec<String>,
+
+    #[child]
+    pub keywords: Option<String>,
+
+    #[child]
     pub modified: DateTime,
+
+    #[child]
     pub revision: Option<String>,
+
+    #[child]
     pub subject: Option<String>,
+
+    #[child]
     pub title: Option<String>,
+
+    #[child]
     pub unit: Unit,
+
+    #[child]
     pub up_axis: UpAxis,
 }
 
+/*
 impl ColladaElement for Asset {
     fn name_test(name: &str) -> bool {
         name == "asset"
@@ -223,6 +235,7 @@ impl ColladaElement for Asset {
         names.push("asset");
     }
 }
+*/
 
 impl Into<v1_5::Asset> for Asset {
     fn into(self) -> v1_5::Asset {
@@ -404,6 +417,10 @@ pub struct ConvexMesh;
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "mesh"]
 pub struct Mesh;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "scene"]
+pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "spline"]
