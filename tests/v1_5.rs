@@ -1,6 +1,8 @@
 extern crate collaborate;
 
 use ::collaborate::*;
+use ::collaborate::common::*;
+use ::collaborate::v1_5::*;
 
 #[test]
 fn collada_asset_minimal() {
@@ -17,6 +19,7 @@ fn collada_asset_minimal() {
 
     let expected = Collada {
         version: "1.5.0".into(),
+        xmlns: None,
         base_uri: None,
         asset: Asset {
             contributors: vec![],
@@ -34,6 +37,9 @@ fn collada_asset_minimal() {
             up_axis: UpAxis::Y,
             extras: vec![],
         },
+        libraries: Vec::new(),
+        scene: None,
+        extras: Vec::new(),
     };
 
     let actual = Collada::from_str(DOCUMENT).unwrap();
@@ -98,7 +104,7 @@ fn collada_missing_asset() {
     "#;
 
     let expected = Error {
-        position: TextPosition { row: 3, column: 4 },
+        position: TextPosition { row: 2, column: 4 },
         kind: ErrorKind::MissingElement {
             parent: "COLLADA".into(),
             expected: vec!["asset"],

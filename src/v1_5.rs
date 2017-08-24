@@ -17,13 +17,14 @@ pub struct Collada {
 
     // Included for completeness in parsing, not actually used.
     #[attribute]
-    xmlns: Option<String>,
+    pub xmlns: Option<String>,
 
     /// The base uri for any relative URIs in the document.
     ///
     /// Specified by the `base` attribute on the root `<COLLADA>` element.
     #[attribute]
-    pub base: Option<AnyUri>,
+    #[name = "base"]
+    pub base_uri: Option<AnyUri>,
 
     /// Global metadata about the COLLADA document.
     #[child]

@@ -13,7 +13,7 @@ fn no_xml_decl() {
     </COLLADA>
     "#;
 
-    let _ = Collada::from_str(DOCUMENT).unwrap();
+    let _ = VersionedDocument::from_str(DOCUMENT).unwrap();
 }
 
 #[test]
@@ -29,7 +29,7 @@ fn doctype() {
     </COLLADA>
     "#;
 
-    let _ = Collada::from_str(DOCUMENT).unwrap();
+    let _ = VersionedDocument::from_str(DOCUMENT).unwrap();
 }
 
 #[test]
@@ -48,5 +48,5 @@ fn extra_whitespace() {
 
     "#;
 
-    let _ = Collada::from_str(DOCUMENT).unwrap();
+    let _ = VersionedDocument::from_str(DOCUMENT).unwrap();
 }

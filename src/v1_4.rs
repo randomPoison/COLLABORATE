@@ -15,7 +15,8 @@ pub struct Collada {
     pub xmlns: Option<String>,
 
     #[attribute]
-    pub base: Option<AnyUri>,
+    #[name = "base"]
+    pub base_uri: Option<AnyUri>,
 
     #[child]
     pub asset: Asset,
