@@ -12,19 +12,38 @@
 //! # Quick Start
 //!
 //! The easiest way to parse a COLLADA document is to load it from a file and use
-//! [`Collada::read`]:
+//! [`VersionedDocument::read`]:
 //!
 //! ```
 //! # #![allow(unused_variables)]
 //! use std::fs::File;
-//! use collaborate::Collada;
+//! use collaborate::VersionedDocument;
 //!
 //! let file = File::open("resources/blender_cube.dae").unwrap();
-//! let collada = Collada::read(file).unwrap();
+//! match VersionedDocument::read(file).unwrap() {
+//!     VersionedDocument::V1_4(document) => println!("Loaded a 1.4.1 document: {:?}", document),
+//!     VersionedDocument::V1_5(document) => println!("Loaded a 1.5.0 document: {:?}", document),
+//! }
 //! ```
 //!
 //! The resulting [`Collada`] object provides direct access to all data in the document,
 //! directly recreating the logical structure of the document as a Rust type.
+//! [`VersionedDocument`] will also automatically detect which version of the COLLADA schema the
+//! document uses, and will parse it correctly.
+//!
+//! If you know ahead of time which version of the COLLADA spec you'll be using, you can use
+//! [`v1_4::Collada`] or [`v1_5::Collada`] directly for convenience:
+//!
+//! ```
+//! # #![allow(unused_variables)]
+//! use std::fs::File;
+//! use collaborate::v1_4;
+//!
+//! let file = File::open("resources/blender_cube.dae").unwrap();
+//!
+//! // I already know that `blender_cube.dae` uses COLLADA version 1.4.1.
+//! let document = v1_4::Collada::read(file).unwrap();
+//! ```
 //!
 //! # COLLADA Versions
 //!
@@ -94,7 +113,7 @@ impl VersionedDocument {
     ///
     /// ```
     /// # #![allow(unused_variables)]
-    /// use collaborate::Collada;
+    /// use collaborate::VersionedDocument;
     ///
     /// static DOCUMENT: &'static str = r#"
     ///     <?xml version="1.0" encoding="utf-8"?>
@@ -106,7 +125,10 @@ impl VersionedDocument {
     ///     </COLLADA>
     /// "#;
     ///
-    /// let collada = Collada::from_str(DOCUMENT).unwrap();
+    /// match VersionedDocument::from_str(DOCUMENT).unwrap() {
+    ///     VersionedDocument::V1_4(document) => println!("Document contents: {:?}", document),
+    ///     _ => panic!("Impossible, the document version was 1.4.1"),
+    /// }
     /// ```
     ///
     /// # Errors
@@ -128,10 +150,13 @@ impl VersionedDocument {
     /// ```
     /// # #![allow(unused_variables)]
     /// use std::fs::File;
-    /// use collaborate::Collada;
+    /// use collaborate::VersionedDocument;
     ///
     /// let file = File::open("resources/blender_cube.dae").unwrap();
-    /// let collada = Collada::read(file).unwrap();
+    /// match VersionedDocument::read(file).unwrap() {
+    ///     VersionedDocument::V1_4(document) => println!("Loaded a 1.4.1 document: {:?}", document),
+    ///     VersionedDocument::V1_5(document) => println!("Loaded a 1.5.0 document: {:?}", document),
+    /// }
     /// ```
     ///
     /// # Errors

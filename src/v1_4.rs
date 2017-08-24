@@ -38,7 +38,7 @@ impl Collada {
     ///
     /// ```
     /// # #![allow(unused_variables)]
-    /// use collaborate::Collada;
+    /// use collaborate::v1_4::Collada;
     ///
     /// static DOCUMENT: &'static str = r#"
     ///     <?xml version="1.0" encoding="utf-8"?>
@@ -72,7 +72,7 @@ impl Collada {
     /// ```
     /// # #![allow(unused_variables)]
     /// use std::fs::File;
-    /// use collaborate::Collada;
+    /// use collaborate::v1_4::Collada;
     ///
     /// let file = File::open("resources/blender_cube.dae").unwrap();
     /// let collada = Collada::read(file).unwrap();

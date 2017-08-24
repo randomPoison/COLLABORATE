@@ -47,11 +47,11 @@ impl Collada {
     ///
     /// ```
     /// # #![allow(unused_variables)]
-    /// use collaborate::Collada;
+    /// use collaborate::v1_5::Collada;
     ///
     /// static DOCUMENT: &'static str = r#"
     ///     <?xml version="1.0" encoding="utf-8"?>
-    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.5.0">
     ///         <asset>
     ///             <created>2017-02-07T20:44:30Z</created>
     ///             <modified>2017-02-07T20:44:30Z</modified>
@@ -81,9 +81,9 @@ impl Collada {
     /// ```
     /// # #![allow(unused_variables)]
     /// use std::fs::File;
-    /// use collaborate::Collada;
+    /// use collaborate::v1_5::Collada;
     ///
-    /// let file = File::open("resources/blender_cube.dae").unwrap();
+    /// let file = File::open("resources/v1_5_minimal.dae").unwrap();
     /// let collada = Collada::read(file).unwrap();
     /// ```
     ///
