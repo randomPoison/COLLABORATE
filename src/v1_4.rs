@@ -4,142 +4,45 @@ use utils::*;
 use utils::ChildOccurrences::*;
 use xml::common::Position;
 use xml::reader::EventReader;
-use xml::reader::XmlEvent::*;
 
-pub fn collaborate<R: Read>(
-    mut reader: EventReader<R>,
-    version: String,
-    base: Option<AnyUri>
-) -> Result<Collada> {
-    // Helper function to simplify the state machine logic around parsing the final
-    // `<extra>` elements.
-    fn parse_extras<R: Read>(reader: &mut EventReader<R>) -> Result<Option<Extra>> {
-        match utils::start_element(reader, "COLLADA")? {
-            Some(next_element) => {
-                if next_element.name.local_name == "extra" {
-                    let extra = Extra::parse_element(reader, next_element)?;
-                    Ok(Some(extra))
-                } else {
-                    return Err(Error {
-                        position: reader.position(),
-                        kind: ErrorKind::UnexpectedElement {
-                            element: next_element.name.local_name,
-                            parent: "COLLADA",
-                            expected: vec!["extra"],
-                        },
-                    });
-                }
-            }
-            None => { Ok(None) }
-        }
-    }
-
-    // The next event must be the `<asset>` tag. No text data is allowed, and
-    // whitespace/comments aren't emitted.
-    let start_element = utils::required_start_element(&mut reader, "COLLADA", "asset")?;
-    let asset = Asset::parse_element(&mut reader, start_element)?;
-
-    let mut extras = Vec::new();
-
-    loop {
-        match utils::start_element(&mut reader, "COLLADA")? {
-            Some(next_element) => {
-                match &*next_element.name.local_name {
-                    "library_animation_clips" => { utils::stub_out(&mut reader, "library_animation_clips")?; }
-                    "library_animations" => { utils::stub_out(&mut reader, "library_animations")?; }
-                    "library_cameras" => { utils::stub_out(&mut reader, "library_cameras")?; }
-                    "library_controllers" => { utils::stub_out(&mut reader, "library_controllers")?; }
-                    "library_effects" => { utils::stub_out(&mut reader, "library_effects")?; }
-                    "library_force_fields" => { utils::stub_out(&mut reader, "library_force_fields")?; }
-                    "library_geometries" => { utils::stub_out(&mut reader, "library_geometries")?; }
-                    "library_images" => { utils::stub_out(&mut reader, "library_images")?; }
-                    "library_lights" => { utils::stub_out(&mut reader, "library_lights")?; }
-                    "library_materials" => { utils::stub_out(&mut reader, "library_materials")?; }
-                    "library_nodes" => { utils::stub_out(&mut reader, "library_nodes")?; }
-                    "library_physics_materials" => { utils::stub_out(&mut reader, "library_physics_materials")?; }
-                    "library_physics_models" => { utils::stub_out(&mut reader, "library_physics_models")?; }
-                    "library_physics_scenes" => { utils::stub_out(&mut reader, "library_physics_scenes")?; }
-                    "library_visual_scenes" => { utils::stub_out(&mut reader, "library_visual_scenes")?; }
-                    "scene" => {
-                        utils::stub_out(&mut reader, "scene")?;
-                        while let Some(extra) = parse_extras(&mut reader)? { extras.push(extra); }
-                        break;
-                    }
-                    "extra" => {
-                        extras.push(Extra::parse_element(&mut reader, next_element)?);
-                        while let Some(extra) = parse_extras(&mut reader)? { extras.push(extra); }
-                        break;
-                    }
-                    _ => {
-                        return Err(Error {
-                            position: reader.position(),
-                            kind: ErrorKind::UnexpectedElement {
-                                element: next_element.name.local_name,
-                                parent: "COLLADA",
-                                expected: vec![
-                                    "library_animation_clips",
-                                    "library_animations",
-                                    "library_cameras",
-                                    "library_controllers",
-                                    "library_effects",
-                                    "library_force_fields",
-                                    "library_geometries",
-                                    "library_images",
-                                    "library_lights",
-                                    "library_materials",
-                                    "library_nodes",
-                                    "library_physics_materials",
-                                    "library_physics_models",
-                                    "library_physics_scenes",
-                                    "library_visual_scenes",
-                                    "scene",
-                                    "extra",
-                                ],
-                            },
-                        });
-                    }
-                }
-            }
-
-            None => { break; }
-        }
-    }
-
-    // Verify the next event is the `EndDocument` event.
-    match reader.next()? {
-        EndDocument => {}
-
-        // Same logic here as with the starting event. The only things that can come after the
-        // close tag are comments, white space, and processing instructions, all of which we
-        // ignore. This can change with future versions of xml-rs, though.
-        event @ _ => { panic!("Unexpected event: {:?}", event); }
-    }
-
-    Ok(Collada {
-        version: version,
-        asset: asset,
-        base_uri: base,
-        extra: extras,
-    })
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "COLLADA"]
 pub struct Collada {
+    #[attribute]
     pub version: String,
+
+    #[attribute]
+    pub xmlns: Option<String>,
+
+    #[attribute]
+    pub base: Option<AnyUri>,
+
+    #[child]
     pub asset: Asset,
-    pub base_uri: Option<AnyUri>,
-    pub extra: Vec<Extra>,
+
+    #[child]
+    pub libraries: Vec<LibraryElement>,
+
+    #[child]
+    pub scene: Option<Scene>,
+
+    #[child]
+    pub extras: Vec<Extra>,
 }
 
 impl Into<v1_5::Collada> for Collada {
     fn into(self) -> v1_5::Collada {
         v1_5::Collada {
             version: self.version,
-            base_uri: self.base_uri,
+            base_uri: self.base,
             asset: self.asset.into(),
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "scene"]
+pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Asset {
@@ -373,7 +276,50 @@ impl Into<v1_5::Contributor> for Contributor {
     }
 }
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum LibraryElement {
+    Animations(LibraryAnimations),
+    AnimationClips(LibraryAnimationClips),
+    Cameras(LibraryCameras),
+    Controllers(LibraryControllers),
+    Effects(LibraryEffects),
+    ForceFields(LibraryForceFields),
+    Geometries(LibraryGeometries),
+    Images(LibraryImages),
+    Lights(LibraryLights),
+    Materials(LibraryMaterials),
+    Nodes(LibraryNodes),
+    PhysicsMaterials(LibraryPhysicsMaterials),
+    PhysicsModels(LibraryPhysicsModels),
+    PhysicsScenes(LibraryPhysicsScenes),
+    VisualScenes(LibraryVisualScenes),
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animations"]
+pub struct LibraryAnimations;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animation_clips"]
+pub struct LibraryAnimationClips;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_cameras"]
+pub struct LibraryCameras;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_controllers"]
+pub struct LibraryControllers;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_effects"]
+pub struct LibraryEffects;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_force_fields"]
+pub struct LibraryForceFields;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "library_geometries"]
 pub struct LibraryGeometries {
     #[attribute]
@@ -393,7 +339,39 @@ pub struct LibraryGeometries {
     pub extra: Vec<Extra>,
 }
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_images"]
+pub struct LibraryImages;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_lights"]
+pub struct LibraryLights;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_materials"]
+pub struct LibraryMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_nodes"]
+pub struct LibraryNodes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_materials"]
+pub struct LibraryPhysicsMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_models"]
+pub struct LibraryPhysicsModels;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_scenes"]
+pub struct LibraryPhysicsScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_visual_scenes"]
+pub struct LibraryVisualScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "geometry"]
 pub struct Geometry {
     #[attribute]
@@ -412,21 +390,21 @@ pub struct Geometry {
     pub extra: Vec<Extra>,
 }
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 pub enum GeometricElement {
     ConvexMesh(ConvexMesh),
     Mesh(Mesh),
     Spline(Spline),
 }
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "convex_mesh"]
 pub struct ConvexMesh;
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "mesh"]
 pub struct Mesh;
 
-#[derive(Debug, Clone, ColladaElement)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "spline"]
 pub struct Spline;
