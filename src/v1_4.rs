@@ -393,91 +393,23 @@ pub struct LibraryGeometries {
     pub extra: Vec<Extra>,
 }
 
-#[derive(Debug, Clone)]
-// #[name = "geometry"]
+#[derive(Debug, Clone, ColladaElement)]
+#[name = "geometry"]
 pub struct Geometry {
-    // #[attribute]
+    #[attribute]
     pub id: String,
 
-    // #[attribute]
+    #[attribute]
     pub name: String,
 
-    // #[child]
+    #[child]
     pub asset: Option<Asset>,
 
-    // #[child]
-    // #[group]
+    #[child]
     pub geometric_element: GeometricElement,
 
-    // #[child]
+    #[child]
     pub extra: Vec<Extra>,
-}
-
-impl ColladaElement for Geometry {
-    fn name_test(name: &str) -> bool {
-        name == "geometry"
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<Geometry>
-    where
-        R: Read
-    {
-        // TODO: Handle attributes.
-
-        let mut asset = None;
-        let mut geometric_element = None;
-        let mut extra = Vec::new();
-
-        ElementConfiguration {
-            name: "geometry",
-            children: &mut [
-                ChildConfiguration {
-                    name: &|name| { name == "asset" },
-                    occurrences: Optional,
-                    action: &mut |reader, element_start| {
-                        asset = Some(Asset::parse_element(reader, element_start)?);
-                        Ok(())
-                    },
-                    add_names: &|names| { names.push("asset"); },
-                },
-
-                ChildConfiguration {
-                    occurrences: Required,
-                    name: &GeometricElement::name_test,
-                    action: &mut |reader, element_start| {
-                        geometric_element = Some(GeometricElement::parse_element(reader, element_start)?);
-                        Ok(())
-                    },
-                    add_names: &GeometricElement::add_names,
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "extra" },
-                    occurrences: Many,
-                    action: &mut |reader, start_element| {
-                        extra.push(Extra::parse_element(reader, start_element)?);
-                        Ok(())
-                    },
-                    add_names: &|names| { names.push("extra"); },
-                },
-            ],
-        }.parse_children(reader)?;
-
-        Ok(Geometry {
-            id: String::from("TODO: please implement me"),
-            name: String::from("TODO: please implement me"),
-            asset,
-            geometric_element: geometric_element.expect("Required child `geometric_element` was `None`"),
-            extra,
-        })
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        names.push("geometry");
-    }
 }
 
 #[derive(Debug, Clone, ColladaElement)]
