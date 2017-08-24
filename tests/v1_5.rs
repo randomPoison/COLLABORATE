@@ -141,10 +141,12 @@ fn asset_full() {
 
     let expected = Asset {
         contributors: vec![Contributor::default(), Contributor::default(), Contributor::default()],
-        coverage: Some(GeographicLocation {
-            longitude: -105.2830,
-            latitude: 40.0170,
-            altitude: Altitude::RelativeToGround(0.0),
+        coverage: Some(Coverage {
+            geographic_location: Some(GeographicLocation {
+                longitude: -105.2830,
+                latitude: 40.0170,
+                altitude: Altitude::RelativeToGround(0.0),
+            }),
         }),
         created: "2017-02-07T20:44:30Z".parse().unwrap(),
         keywords: Some("foo bar baz".into()),

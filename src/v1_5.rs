@@ -1,7 +1,6 @@
 use {AnyUri, DateTime, Extra, Result, Error, ErrorKind, Unit, UpAxis, utils};
 use std::io::Read;
 use utils::*;
-use utils::ChildOccurrences::*;
 use xml::common::Position;
 use xml::reader::EventReader;
 use xml::reader::XmlEvent::*;
@@ -128,42 +127,53 @@ impl Collada {
 /// # COLLADA Versions
 ///
 /// `coverage` and `extras` were added in COLLADA version `1.5.0`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "asset"]
 pub struct Asset {
     /// The list of contributors who worked on the asset.
+    #[child]
     pub contributors: Vec<Contributor>,
 
     /// Specifies the location of the visual scene in physical space.
-    pub coverage: Option<GeographicLocation>,
+    #[child]
+    pub coverage: Option<Coverage>,
 
     /// Specifies the date and time that the asset was created.
+    #[child]
     pub created: DateTime,
 
     /// A list of keywords used as search criteria for the asset.
+    #[child]
     pub keywords: Option<String>,
 
     /// Contains the date and time that the parent element was last modified.
+    #[child]
     pub modified: DateTime,
 
     /// Contains revision information about the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub revision: Option<String>,
 
     /// Contains a description of the topical subject of the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub subject: Option<String>,
 
     /// Contains title information for the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub title: Option<String>,
 
     /// Defines the unit of distance for this asset.
     ///
     /// This unit is used by the asset and all of its children, unless overridden by a more
     /// local `Unit`.
+    #[child]
+    #[optional_with_default]
     pub unit: Unit,
 
     /// Describes the coordinate system of the asset.
@@ -171,6 +181,8 @@ pub struct Asset {
     /// See the documentation for [`UpAxis`] for more details.
     ///
     /// [`UpAxis`]: ../struct.UpAxis.html
+    #[child]
+    #[optional_with_default]
     pub up_axis: UpAxis,
 
     /// Provides arbitrary additional data about the asset.
@@ -178,282 +190,15 @@ pub struct Asset {
     /// See the [`Extra`] documentation for more information.
     ///
     /// [`Extra`]: ./struct.Extra.html
+    #[child]
     pub extras: Vec<Extra>,
 }
 
-// We need a custom implementation of `ColladaElement` for `Asset` to handle `<coverage>` in a
-// user-friendly way. According to the COLLADA spec, `<coverage>` is optional, and only has a
-// single, optional `<geographic_location>` child. This double-optional setup is a bit odd, and
-// ultimately isn't important to expose to the end user, so we collapse both down into a single
-// `Option<GeographicLocation>`. Unfortunately, handling this requires writing some one-off
-// parsing code to collapse the structure into what we want the end user to see. If this turns
-// out to be a common pattern in COLLADA, we should add direct support for handling it to
-// `parse-collada-derive`.
-impl ColladaElement for Asset {
-    fn name_test(name: &str) -> bool {
-        name == "asset"
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<Asset>
-    where
-        R: Read,
-    {
-        utils::verify_attributes(reader, "asset", element_start.attributes)?;
-
-        let mut contributors = Vec::default();
-        let mut coverage = None;
-        let mut created = None;
-        let mut keywords = None;
-        let mut modified = None;
-        let mut revision = None;
-        let mut subject = None;
-        let mut title = None;
-        let mut unit = None;
-        let mut up_axis = None;
-        let mut extras = Vec::default();
-
-        ElementConfiguration {
-            name: "asset",
-            children: &mut [
-                ChildConfiguration {
-                    name: &|name| { name == "contributor" },
-                    occurrences: Many,
-
-                    action: &mut |reader, element_start| {
-                        let contributor = Contributor::parse_element(reader, element_start)?;
-                        contributors.push(contributor);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("contributor"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "coverage" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "coverage", element_start.attributes)?;
-
-                        ElementConfiguration {
-                            name: "coverage",
-                            children: &mut [
-                                ChildConfiguration {
-                                    name: &|name| { name == "geographic_location" },
-                                    occurrences: Optional,
-
-                                    action: &mut |reader, element_start| {
-                                        coverage = Some(GeographicLocation::parse_element(
-                                            reader,
-                                            element_start,
-                                        )?);
-                                        Ok(())
-                                    },
-
-                                    add_names: &|names| { names.push("geographic_location"); },
-                                }
-                            ],
-                        }.parse_children(reader)
-                    },
-
-                    add_names: &|names| { names.push("coverage"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "created" },
-                    occurrences: Required,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "created", element_start.attributes)?;
-                        created = utils::optional_text_contents(reader, "created")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("created"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "keywords" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "keywords", element_start.attributes)?;
-                        keywords = utils::optional_text_contents::<_, String>(reader, "keywords")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("keywords"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "modified" },
-                    occurrences: Required,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "modified", element_start.attributes)?;
-                        modified = utils::optional_text_contents(reader, "modified")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("modified"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "revision" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "revision", element_start.attributes)?;
-                        revision = utils::optional_text_contents(reader, "revision")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("revision"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "subject" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "subject", element_start.attributes)?;
-                        subject = utils::optional_text_contents(reader, "subject")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("subject"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "title" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "title", element_start.attributes)?;
-                        title = utils::optional_text_contents(reader, "title")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("title"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "unit" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        let mut unit_attrib = None;
-                        let mut meter_attrib = None;
-
-                        for attribute in element_start.attributes {
-                            match &*attribute.name.local_name {
-                                "name" => {
-                                    // TODO: Validate that this follows the xsd:NMTOKEN format.
-                                    // http://www.datypic.com/sc/xsd/t-xsd_NMTOKEN.html
-                                    unit_attrib = Some(attribute.value);
-                                }
-
-                                "meter" => {
-                                    let parsed = attribute.value
-                                        .parse()
-                                        .map_err(|error| {
-                                            Error {
-                                                position: reader.position(),
-                                                kind: ErrorKind::ParseFloatError(error),
-                                            }
-                                        })?;
-                                    meter_attrib = Some(parsed);
-                                }
-
-                                attrib_name @ _ => {
-                                    return Err(Error {
-                                        position: reader.position(),
-                                        kind: ErrorKind::UnexpectedAttribute {
-                                            element: "unit",
-                                            attribute: attrib_name.into(),
-                                            expected: vec!["unit", "meter"],
-                                        },
-                                    })
-                                }
-                            }
-                        }
-
-                        unit = Some(Unit {
-                            meter: meter_attrib.unwrap_or(1.0),
-                            name: unit_attrib.unwrap_or_else(|| "meter".into()),
-                        });
-
-                        utils::end_element(reader, "unit")
-                    },
-
-                    add_names: &|names| { names.push("unit"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "up_axis" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "up_axis", element_start.attributes)?;
-                        let text: String = utils::optional_text_contents(reader, "up_axis")?.unwrap_or_default();
-                        let parsed = match &*text {
-                            "X_UP" => { UpAxis::X }
-                            "Y_UP" => { UpAxis::Y }
-                            "Z_UP" => { UpAxis::Z }
-                            _ => {
-                                return Err(Error {
-                                    position: reader.position(),
-                                    kind: ErrorKind::InvalidValue {
-                                        element: "up_axis".into(),
-                                        value: text,
-                                    },
-                                });
-                            }
-                        };
-
-                        up_axis = Some(parsed);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("up_axis"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "extra" },
-                    occurrences: Many,
-
-                    action: &mut |reader, element_start| {
-                        let extra = Extra::parse_element(reader, element_start)?;
-                        extras.push(extra);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("extra"); },
-                }
-            ],
-        }.parse_children(reader)?;
-
-        Ok(Asset {
-            contributors: contributors,
-            coverage: coverage,
-            created: created.expect("Required element was not found"),
-            keywords: keywords,
-            modified: modified.expect("Required element was not found"),
-            revision: revision,
-            subject: subject,
-            title: title,
-            unit: unit.unwrap_or_default(),
-            up_axis: up_axis.unwrap_or_default(),
-            extras: extras,
-        })
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        names.push("asset");
-    }
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "coverage"]
+pub struct Coverage {
+    #[child]
+    pub geographic_location: Option<GeographicLocation>,
 }
 
 /// Information about a contributor to an asset.
