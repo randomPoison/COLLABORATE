@@ -22,7 +22,42 @@ pub fn derive(input: TokenStream) -> TokenStream {
 }
 
 fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, String> {
-    let struct_ident = input.ident;
+    let ident = input.ident;
+
+    // Process the body of the type and gather information about attributes and children.
+    // ----------------------------------------------------------------------------------
+    let mut children = Vec::new();
+    let mut attributes = Vec::new();
+    let mut stub_me_out = false;
+
+    let fields = match input.body {
+        Body::Enum(mut variants) => {
+            let variants = variants.drain(..)
+                .map(|variant| {
+                    let name = variant.ident;
+                    match variant.data {
+                        VariantData::Tuple(mut fields) => {
+                            assert!(fields.len() == 1, "Enum variants may only have a single type");
+                            let inner_type = fields.pop().unwrap().ty;
+                            return EnumMemberVariant { name, inner_type };
+                        }
+
+                        _ => panic!("Only tuple variants with a single member are supported for enum variants"),
+                    }
+                })
+                .collect();
+            return Ok(ElementConfiguration::EnumMember(EnumMember { ident, variants }));
+        }
+
+        Body::Struct(VariantData::Struct(fields)) => { fields }
+
+        Body::Struct(VariantData::Tuple(_)) => { return Err("`#[derive(ColladaElement)]` does not support tuple structs")?; }
+
+        Body::Struct(VariantData::Unit) => {
+            stub_me_out = true;
+            Vec::new()
+        }
+    };
 
     // Process the top-level attributes on the type to find the `#[name = "foo"]` attribute.
     // -------------------------------------------------------------------------------------
@@ -42,25 +77,6 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         }
 
         element_name.ok_or(r#"Type must have `#[name = "..."]` attribute when using `#[derive(ColladaElement)]`"#)?
-    };
-
-    // Process the body of the type and gather information about attributes and children.
-    // ----------------------------------------------------------------------------------
-    let mut children = Vec::new();
-    let mut attributes = Vec::new();
-    let mut stub_me_out = false;
-
-    let fields = match input.body {
-        Body::Enum(_) => { return Err("`#[derive(ColladaElement)]` does not support enum types")?; }
-
-        Body::Struct(VariantData::Struct(fields)) => { fields }
-
-        Body::Struct(VariantData::Tuple(_)) => { return Err("`#[derive(ColladaElement)]` does not support tuple structs")?; }
-
-        Body::Struct(VariantData::Unit) => {
-            stub_me_out = true;
-            Vec::new()
-        }
     };
 
     for field in fields {
@@ -171,7 +187,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         let data_type = match inner_type {
             Ty::Path(None, ref path) => {
                 let segment = path.segments.last().expect("Somehow got an empty path ?_?");
-                if segment.ident.as_ref() == "String" {
+                if segment.ident.as_ref() == "String" || segment.ident.as_ref() == "DateTime" {
                     DataType::TextData(inner_type.clone())
                 } else {
                     if is_text_data {
@@ -215,24 +231,39 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         }
     }
 
-    Ok(ElementConfiguration {
-        struct_ident: struct_ident,
+    Ok(ElementConfiguration::StructMember(StructMember {
+        ident: ident,
         element_name: element_name,
         attributes: attributes,
         children: children,
 
         stub_me_out,
-    })
+    }))
 }
 
-struct ElementConfiguration {
-    struct_ident: Ident,
+enum ElementConfiguration {
+    StructMember(StructMember),
+    EnumMember(EnumMember),
+}
+
+struct StructMember {
+    ident: Ident,
     element_name: String,
     attributes: Vec<Attribute>,
     children: Vec<Child>,
 
     /// Temporary flag to allow us to stub out elements until the entire spec is covered.
     stub_me_out: bool,
+}
+
+struct EnumMember {
+    ident: Ident,
+    variants: Vec<EnumMemberVariant>,
+}
+
+struct EnumMemberVariant {
+    name: Ident,
+    inner_type: Ty,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,7 +318,79 @@ impl ToTokens for ChildOccurrences {
 }
 
 fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
-    let ElementConfiguration { struct_ident, element_name, attributes, children, stub_me_out } = process_derive_input(derive_input)?;
+    match process_derive_input(derive_input)? {
+        ElementConfiguration::StructMember(config) => generate_struct_impl(config),
+        ElementConfiguration::EnumMember(config) => generate_enum_impl(config),
+    }
+}
+
+fn generate_enum_impl(config: EnumMember) -> Result<quote::Tokens, String> {
+    let EnumMember { ident, variants } = config;
+
+    // Convert the list of types `[A, B, C]` to the name test
+    // `A::name_test(name) || B::name_test(name) || C::name_test(name)`
+    let name_test = variants.iter()
+        .map(|variant| &variant.inner_type)
+        .fold(None, |joined, current| {
+            match joined {
+                None => Some(quote! { #current::name_test(name) }),
+                Some(joined) => Some(quote! { #joined || #current::name_test(name) }),
+            }
+        });
+
+    let parse_variants = variants.iter()
+        .fold(None, |joined, current| {
+            let &EnumMemberVariant { ref name, ref inner_type } = current;
+            match joined {
+                None => Some(quote! {
+                    if #inner_type::name_test(&*element_start.name.local_name) {
+                        let element = #inner_type::parse_element(reader, element_start)?;
+                        Ok(#ident::#name(element))
+                    }
+                }),
+
+                Some(joined) => Some(quote! {
+                    #joined
+                    else if #inner_type::name_test(&*element_start.name.local_name) {
+                        let element = #inner_type::parse_element(reader, element_start)?;
+                        Ok(#ident::#name(element))
+                    }
+                }),
+            }
+        });
+
+    let add_names = variants.iter()
+        .map(|variant| &variant.inner_type)
+        .map(|ty| quote! { #ty::add_names(names); });
+
+    Ok(quote! {
+        impl ColladaElement for #ident {
+            fn name_test(name: &str) -> bool {
+                #name_test
+            }
+
+            fn parse_element<R>(
+                reader: &mut ::xml::reader::EventReader<R>,
+                element_start: ::utils::ElementStart,
+            ) -> Result<#ident>
+            where
+                R: ::std::io::Read,
+            {
+                #parse_variants
+                else {
+                    panic!("Unexpected group member for `GeometricElement`: {}", element_start.name.local_name);
+                }
+            }
+
+            fn add_names(names: &mut Vec<&'static str>) {
+                #( #add_names )*
+            }
+        }
+    })
+}
+
+fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
+    let StructMember { ident, element_name, attributes, children, stub_me_out } = config;
 
     // Generate declarations for the member variables of the struct.
     // -------------------------------------------------------------
@@ -553,7 +656,7 @@ fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
             });
 
         quote! {
-            Ok(#struct_ident {
+            Ok(#ident {
                 #( #attribs, )*
                 #( #childs, )*
             })
@@ -597,7 +700,7 @@ fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
     // Put all the pieces together.
     // ----------------------------
     Ok(quote! {
-        impl ::utils::ColladaElement for #struct_ident {
+        impl ::utils::ColladaElement for #ident {
             fn name_test(name: &str) -> bool {
                 name == #element_name
             }

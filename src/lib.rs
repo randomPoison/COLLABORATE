@@ -1,9 +1,9 @@
 //! A library for parsing and processing COLLADA documents.
 //!
-//! [COLLADA][COLLADA] is a COLLAborative Design Activity that defines an XML-based schema to
+//! [COLLADA] is a COLLAborative Design Activity that defines an XML-based schema to
 //! enable 3D authoring applications to freely exchange digital assets. It supports a vast array of
 //! features used in 3D modeling, animation, and VFX work, and provides and open, non-proprietary
-//! alternative to common formats like [FBX][FBX].
+//! alternative to common formats like [FBX].
 //!
 //! This provides functionality for parsing a COLLADA document and utilities for processing the
 //! contained data, with the intention of enable direct usage of COLLADA data as well as
@@ -12,7 +12,7 @@
 //! # Quick Start
 //!
 //! The easiest way to parse a COLLADA document is to load it from a file and use
-//! [`Collada::read()`][Collada::read]:
+//! [`Collada::read`]:
 //!
 //! ```
 //! # #![allow(unused_variables)]
@@ -23,7 +23,7 @@
 //! let collada = Collada::read(file).unwrap();
 //! ```
 //!
-//! The resulting [`Collada`][Collada] object provides direct access to all data in the document,
+//! The resulting [`Collada`] object provides direct access to all data in the document,
 //! directly recreating the logical structure of the document as a Rust type.
 //!
 //! # COLLADA Versions
@@ -55,8 +55,8 @@
 //!
 //! [COLLADA]: https://www.khronos.org/collada/
 //! [FBX]: https://en.wikipedia.org/wiki/FBX
-//! [Collada]: struct.Collada.html
-//! [Collada::read]: struct.Collada.html#method.read
+//! [`Collada`]: struct.Collada.html
+//! [`Collada::read`]: struct.Collada.html#method.read
 
 pub extern crate chrono;
 #[macro_use]

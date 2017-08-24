@@ -140,7 +140,7 @@ pub struct Asset {
     pub created: DateTime,
 
     /// A list of keywords used as search criteria for the asset.
-    pub keywords: Vec<String>,
+    pub keywords: Option<String>,
 
     /// Contains the date and time that the parent element was last modified.
     pub modified: DateTime,
@@ -206,7 +206,7 @@ impl ColladaElement for Asset {
         let mut contributors = Vec::default();
         let mut coverage = None;
         let mut created = None;
-        let mut keywords = Vec::new();
+        let mut keywords = None;
         let mut modified = None;
         let mut revision = None;
         let mut subject = None;
@@ -281,12 +281,7 @@ impl ColladaElement for Asset {
 
                     action: &mut |reader, element_start| {
                         utils::verify_attributes(reader, "keywords", element_start.attributes)?;
-                        if let Some(keywords_string) = utils::optional_text_contents::<_, String>(reader, "keywords")? {
-                            keywords = keywords_string
-                                .split_whitespace()
-                                .map(Into::into)
-                                .collect();
-                        }
+                        keywords = utils::optional_text_contents::<_, String>(reader, "keywords")?;
                         Ok(())
                     },
 

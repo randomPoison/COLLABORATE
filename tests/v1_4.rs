@@ -3,6 +3,14 @@ extern crate collaborate;
 use ::collaborate::*;
 
 #[test]
+fn blender_cube() {
+    static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+
+    let document = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    let _ = Collada::from_str(&*document).unwrap();
+}
+
+#[test]
 fn collada_asset_minimal() {
     static DOCUMENT: &'static str = r#"
     <?xml version="1.0" encoding="utf-8"?>
@@ -22,7 +30,7 @@ fn collada_asset_minimal() {
             contributors: vec![],
             coverage: None,
             created: "2017-02-07T20:44:30Z".parse().unwrap(),
-            keywords: Vec::new(),
+            keywords: None,
             modified: "2017-02-07T20:44:30Z".parse().unwrap(),
             revision: None,
             subject: None,
@@ -49,7 +57,7 @@ fn collada_missing_asset() {
     "#;
 
     let expected = Error {
-        position: TextPosition { row: 3, column: 4 },
+        position: TextPosition { row: 2, column: 4 },
         kind: ErrorKind::MissingElement {
             parent: "COLLADA".into(),
             expected: vec!["asset"],
@@ -85,7 +93,7 @@ fn asset_full() {
         contributors: vec![Contributor::default(), Contributor::default(), Contributor::default()],
         coverage: None,
         created: "2017-02-07T20:44:30Z".parse().unwrap(),
-        keywords: vec!["foo".into(), "bar".into(), "baz".into()],
+        keywords: Some("foo bar baz".into()),
         modified: "2017-02-07T20:44:30Z".parse().unwrap(),
         revision: Some("7".into()),
         subject: Some("A thing".into()),
@@ -130,7 +138,7 @@ fn asset_blender() {
         ],
         coverage: None,
         created: "2017-02-01T09:29:54".parse().unwrap(),
-        keywords: Vec::new(),
+        keywords: None,
         modified: "2017-02-01T09:29:54".parse().unwrap(),
         revision: None,
         subject: None,

@@ -17,8 +17,8 @@ pub static PARSER_CONFIG: ParserConfig = ParserConfig {
     coalesce_characters: true,
 };
 
-/// Helper trait for handling parsing. This is automatically generated for most types with the
-/// `parse-collada-derive` crate.
+/// Helper trait for handling parsing. This can be derived for most types with the
+/// `collaborate-derive` crate.
 pub trait ColladaElement: Sized {
     /// Tests whether `name` is a valid name for the element or group.
     ///
@@ -63,7 +63,7 @@ pub struct ElementConfiguration<'a, R: 'a + Read> {
 }
 
 impl<'a, R: 'a + Read> ElementConfiguration<'a, R> {
-    pub fn parse_children(mut self, reader: &mut EventReader<R>) -> Result<()> {
+    pub fn parse_children(self, reader: &mut EventReader<R>) -> Result<()> {
         // Keep track of the text position for the root element so that it can be used for error
         // messages.
         let root_position = reader.position();
@@ -169,7 +169,7 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
 
     // The next element will always be the `<COLLADA>` tag. This will specify what version of
     // the COLLADA spec is being used, which is how we'll determine our sub-parser.
-    let attributes = match reader.next()? {
+    let element_start = match reader.next()? {
         StartElement { name, attributes, namespace: _ } => {
             // If the element isn't the `<COLLADA>` tag then the document is malformed,
             // return an error.
@@ -182,7 +182,7 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
                 })
             }
 
-            attributes
+            ElementStart { name, attributes }
         }
 
         // I'm *almost* 100% certain that the only event that can follow the `StartDocument`
@@ -199,23 +199,23 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
     let mut version = None;
     let mut base_uri = None;
 
-    for attribute in attributes {
+    for attribute in &element_start.attributes {
         // NOTE: I'm using `if` blocks instead of `match` here because using `match`
         // won't allow for the name to be moved out of `attribute`. Using `if` saves
         // some unnecessary allocations. I expect at some point Rust will get smart
         // enough that this will no longer be an issue, at which point we should
         // change this to use `match`, as that keeps better with Rust best practices.
         if attribute.name.local_name == "version" {
-            version = Some(attribute.value);
+            version = Some(attribute.value.clone());
         } else if attribute.name.local_name == "base" {
             // TODO: Do we need to validate the URI?
-            base_uri = Some(AnyUri(attribute.value));
+            base_uri = Some(AnyUri(attribute.value.clone()));
         } else {
             return Err(Error {
                 position: reader.position(),
                 kind: ErrorKind::UnexpectedAttribute {
                     element: "COLLADA",
-                    attribute: attribute.name.local_name,
+                    attribute: attribute.name.local_name.clone(),
                     expected: COLLADA_ATTRIBS.into(),
                 },
             })
@@ -237,7 +237,7 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
     };
 
     if version == "1.4.0" || version == "1.4.1" {
-        v1_4::collaborate(reader, version, base_uri).map(Into::into)
+        v1_4::Collada::parse_element(&mut reader, element_start).map(Into::into)
     } else if version == "1.5.0" {
         v1_5::collaborate(reader, version, base_uri)
     } else {
@@ -256,7 +256,7 @@ pub fn required_start_element<R: Read>(
     search_name: &'static str,
 ) -> Result<ElementStart> {
     match reader.next()? {
-        StartElement { name, attributes, namespace } => {
+        StartElement { name, attributes, namespace: _ } => {
             if search_name != name.local_name {
                 return Err(Error {
                     position: reader.position(),
