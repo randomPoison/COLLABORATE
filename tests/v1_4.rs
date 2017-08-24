@@ -57,7 +57,7 @@ fn collada_missing_asset() {
     "#;
 
     let expected = Error {
-        position: TextPosition { row: 3, column: 4 },
+        position: TextPosition { row: 2, column: 4 },
         kind: ErrorKind::MissingElement {
             parent: "COLLADA".into(),
             expected: vec!["asset"],

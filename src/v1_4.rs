@@ -323,10 +323,10 @@ pub struct LibraryForceFields;
 #[name = "library_geometries"]
 pub struct LibraryGeometries {
     #[attribute]
-    pub id: String,
+    pub id: Option<String>,
 
     #[attribute]
-    pub name: String,
+    pub name: Option<String>,
 
     #[child]
     pub asset: Option<Asset>,
