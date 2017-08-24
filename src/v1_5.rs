@@ -1,62 +1,42 @@
-use {AnyUri, DateTime, Extra, Result, Error, ErrorKind, Unit, UpAxis, utils};
+use {AnyUri, DateTime, Result, Error, ErrorKind, Unit, UpAxis, utils};
+use common::*;
 use std::io::Read;
 use utils::*;
 use xml::common::Position;
 use xml::reader::EventReader;
-use xml::reader::XmlEvent::*;
-
-/// The logic behind parsing the COLLADA document.
-///
-/// `from_str()` and `read()` just create the `xml::EventReader` and then defer to `parse()`.
-///
-/// TODO: This is currently publicly exported. That shouldn't happen.
-pub fn collaborate<R: Read>(mut reader: EventReader<R>, version: String, base: Option<AnyUri>) -> Result<Collada> {
-    // The next event must be the `<asset>` tag. No text data is allowed, and
-    // whitespace/comments aren't emitted.
-    let start_element = utils::required_start_element(&mut reader, "COLLADA", "asset")?;
-    let asset = Asset::parse_element(&mut reader, start_element)?;
-
-    // Eat any events until we get to the `</COLLADA>` tag.
-    // TODO: Actually parse the body of the document.
-    loop {
-        match reader.next()? {
-            EndElement { ref name } if name.local_name == "COLLADA" => { break }
-            _ => {}
-        }
-    }
-
-    // TODO: Verify the next event is the `EndDocument` event.
-    match reader.next()? {
-        EndDocument => {}
-
-        // Same logic here as with the starting event. The only things that can come after the
-        // close tag are comments, white space, and processing instructions, all of which we
-        // ignore. This can change with future versions of xml-rs, though.
-        event @ _ => { panic!("Unexpected event: {:?}", event); }
-    }
-
-    Ok(Collada {
-        version: version,
-        asset: asset,
-        base_uri: base,
-    })
-}
 
 /// Represents a parsed COLLADA document.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "COLLADA"]
 pub struct Collada {
     /// The version string for the COLLADA specification used by the document.
     ///
     /// Only "1.4.0", "1.4.1", and "1.5.0" are supported currently.
+    #[attribute]
     pub version: String,
+
+    // Included for completeness in parsing, not actually used.
+    #[attribute]
+    xmlns: Option<String>,
 
     /// The base uri for any relative URIs in the document.
     ///
     /// Specified by the `base` attribute on the root `<COLLADA>` element.
-    pub base_uri: Option<AnyUri>,
+    #[attribute]
+    pub base: Option<AnyUri>,
 
     /// Global metadata about the COLLADA document.
+    #[child]
     pub asset: Asset,
+
+    #[child]
+    pub libraries: Vec<Library>,
+
+    #[child]
+    pub scene: Option<Scene>,
+
+    #[child]
+    pub extras: Vec<Extra>,
 }
 
 impl Collada {
@@ -90,7 +70,7 @@ impl Collada {
     /// [crate]: index.html
     pub fn from_str(source: &str) -> Result<Collada> {
         let reader = EventReader::new_with_config(source.as_bytes(), utils::PARSER_CONFIG.clone());
-        utils::parse(reader)
+        Self::parse(reader)
     }
 
     /// Attempts to parse the contents of a COLLADA document.
@@ -115,7 +95,33 @@ impl Collada {
     /// [crate]: index.html
     pub fn read<R: Read>(reader: R) -> Result<Collada> {
         let reader = EventReader::new_with_config(reader, utils::PARSER_CONFIG.clone());
-        utils::parse(reader)
+        Self::parse(reader)
+    }
+
+    pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<Collada> {
+        // Get the opening `<COLLADA>` tag and find the "version" attribute.
+        let element_start = utils::get_document_start(&mut reader)?;
+        let version = element_start.attributes.iter()
+            .find(|attrib| attrib.name.local_name == "version")
+            .map(|attrib| attrib.value.clone())
+            .ok_or(Error {
+                position: reader.position(),
+                kind: ErrorKind::MissingAttribute {
+                    element: "COLLADA",
+                    attribute: "version",
+                },
+            })?;
+
+        if version != "1.5.0" {
+            return Err(Error {
+                position: reader.position(),
+                kind: ErrorKind::UnsupportedVersion {
+                    version: version,
+                },
+            });
+        }
+
+        Collada::parse_element(&mut reader, element_start)
     }
 }
 
@@ -250,6 +256,53 @@ pub struct Contributor {
     pub source_data: Option<AnyUri>,
 }
 
+/// Provides arbitrary additional information about an element.
+///
+/// COLLADA allows for applications to provide extra information about any given piece of data,
+/// including application-specific information that's not part of the COLLADA specification. This
+/// data can be any syntactically valid XML data, and is not parsed as part of this library, save
+/// for a few specific 3rd party applications that are directly supported.
+///
+/// # Choosing a Technique
+///
+/// There may be more than one [`Technique`][Technique] provided in `techniques`, but generally
+/// only one is used by the consuming application. The application should pick a technique
+/// with a supported profile. If there are multiple techniques with supported profiles the
+/// application is free to pick whichever technique is preferred.
+///
+/// [Technique]: struct.Technique.html
+#[derive(Debug, Clone, Default, PartialEq, ColladaElement)]
+#[name = "extra"]
+pub struct Extra {
+    /// The identifier of the element, if present. Will be unique within the document.
+    #[attribute]
+    pub id: Option<String>,
+
+    /// The text string name of the element, if present.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// A hint as to the type of information this element represents, if present. Must be
+    /// must be understood by the consuming application.
+    #[attribute]
+    #[name = "type"]
+    pub type_hint: Option<String>,
+
+    /// Asset-management information for this element, if present.
+    ///
+    /// While this is technically allowed in all `<extra>` elements, it is likely only present in
+    /// elements that describe a new "asset" of some kind, rather than in `<extra>` elements that
+    /// provide application-specific information about an existing one.
+    #[child]
+    pub asset: Option<Asset>,
+
+    /// The arbitrary additional information, containing unprocessed XML events. There will always
+    /// be at least one item in `techniques`.
+    #[child]
+    #[required]
+    pub techniques: Vec<Technique>,
+}
+
 /// Defines geographic location information for an [`Asset`][Asset].
 ///
 /// A geographic location is given in latitude, longitude, and altitude coordinates as defined by
@@ -274,6 +327,114 @@ pub struct GeographicLocation {
     #[child]
     pub altitude: Altitude,
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Library {
+    Animations(LibraryAnimations),
+    AnimationClips(LibraryAnimationClips),
+    ArticulatedSystmes(LibraryArticulatedSystems),
+    Cameras(LibraryCameras),
+    Controllers(LibraryControllers),
+    Effects(LibraryEffects),
+    ForceFields(LibraryForceFields),
+    Formulas(LibraryFormulas),
+    Geometries(LibraryGeometries),
+    Images(LibraryImages),
+    Joints(LibraryJoints),
+    KinematicsModels(LibraryKinematicsModels),
+    KinematicsScenes(LibraryKinematicsScenes),
+    Lights(LibraryLights),
+    Materials(LibraryMaterials),
+    Nodes(LibraryNodes),
+    PhysicsMaterials(LibraryPhysicsMaterials),
+    PhysicsModels(LibraryPhysicsModels),
+    PhysicsScenes(LibraryPhysicsScenes),
+    VisualScenes(LibraryVisualScenes),
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animations"]
+pub struct LibraryAnimations;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animation_clips"]
+pub struct LibraryAnimationClips;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_articulated_systems"]
+pub struct LibraryArticulatedSystems;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_cameras"]
+pub struct LibraryCameras;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_controllers"]
+pub struct LibraryControllers;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_effects"]
+pub struct LibraryEffects;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_force_fields"]
+pub struct LibraryForceFields;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_formulas"]
+pub struct LibraryFormulas;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_geometries"]
+pub struct LibraryGeometries;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_images"]
+pub struct LibraryImages;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_joints"]
+pub struct LibraryJoints;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_kinematics_models"]
+pub struct LibraryKinematicsModels;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_kinematics_scenes"]
+pub struct LibraryKinematicsScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_lights"]
+pub struct LibraryLights;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_materials"]
+pub struct LibraryMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_nodes"]
+pub struct LibraryNodes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_materials"]
+pub struct LibraryPhysicsMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_models"]
+pub struct LibraryPhysicsModels;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_scenes"]
+pub struct LibraryPhysicsScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_visual_scenes"]
+pub struct LibraryVisualScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "scene"]
+pub struct Scene;
 
 /// Specifies the altitude of a [`GeographicLocation`][GeographicLocation].
 ///

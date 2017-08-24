@@ -364,7 +364,7 @@ fn generate_enum_impl(config: EnumMember) -> Result<quote::Tokens, String> {
         .map(|ty| quote! { #ty::add_names(names); });
 
     Ok(quote! {
-        impl ColladaElement for #ident {
+        impl ::utils::ColladaElement for #ident {
             fn name_test(name: &str) -> bool {
                 #name_test
             }
@@ -376,6 +376,9 @@ fn generate_enum_impl(config: EnumMember) -> Result<quote::Tokens, String> {
             where
                 R: ::std::io::Read,
             {
+                #[allow(unused_imports)]
+                use ::xml::common::Position;
+
                 #parse_variants
                 else {
                     panic!("Unexpected group member for `GeometricElement`: {}", element_start.name.local_name);
@@ -685,6 +688,8 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 use std::str::FromStr;
                 use utils::*;
                 use utils::ChildOccurrences::*;
+                #[allow(unused_imports)]
+                use ::xml::common::Position;
 
                 #member_decls
 
