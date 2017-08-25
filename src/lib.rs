@@ -1,8 +1,12 @@
 //! A library for parsing and processing COLLADA documents.
 //!
+//! > NOTE: Currently this library is focussed on supporting the `1.4.1` COLLADA specification.
+//! > Support for version `1.5.0` is desired, but not a current priority. If you'd like to help
+//! > add support, please feel free to open issues in the issue tracker or make a pull request.
+//!
 //! [COLLADA] is a COLLAborative Design Activity that defines an XML-based schema to
 //! enable 3D authoring applications to freely exchange digital assets. It supports a vast array of
-//! features used in 3D modeling, animation, and VFX work, and provides and open, non-proprietary
+//! features used in 3D modeling, animation, and VFX work, and provides an open, non-proprietary
 //! alternative to common formats like [FBX].
 //!
 //! This provides functionality for parsing a COLLADA document and utilities for processing the
@@ -12,36 +16,57 @@
 //! # Quick Start
 //!
 //! The easiest way to parse a COLLADA document is to load it from a file and use
-//! [`Collada::read`]:
+//! [`VersionedDocument::read`]:
 //!
 //! ```
 //! # #![allow(unused_variables)]
 //! use std::fs::File;
-//! use collaborate::Collada;
+//! use collaborate::VersionedDocument;
 //!
 //! let file = File::open("resources/blender_cube.dae").unwrap();
-//! let collada = Collada::read(file).unwrap();
+//! match VersionedDocument::read(file).unwrap() {
+//!     VersionedDocument::V1_4(document) => {
+//!         println!("Loaded a 1.4.1 document: {:?}", document);
+//!     }
+//!
+//!     VersionedDocument::V1_5(document) => {
+//!         println!("Loaded a 1.5.0 document: {:?}", document);
+//!     }
+//! }
 //! ```
 //!
-//! The resulting [`Collada`] object provides direct access to all data in the document,
-//! directly recreating the logical structure of the document as a Rust type.
+//! Each variant wraps a `Collada` object which provides direct access to all data in the
+//! document, directly recreating the logical structure of the document as a Rust type.
+//! [`VersionedDocument`] will also automatically detect which version of the COLLADA schema the
+//! document uses, and will parse it correctly.
+//!
+//! If you know ahead of time which version of the COLLADA spec you'll be using, you can use
+//! [`v1_4::Collada`] or [`v1_5::Collada`] directly for convenience:
+//!
+//! ```
+//! # #![allow(unused_variables)]
+//! use std::fs::File;
+//! use collaborate::v1_4;
+//!
+//! let file = File::open("resources/blender_cube.dae").unwrap();
+//!
+//! // I already know that `blender_cube.dae` uses COLLADA version 1.4.1.
+//! let document = v1_4::Collada::read(file).unwrap();
+//! ```
 //!
 //! # COLLADA Versions
 //!
 //! Currently there are 3 COLLADA versions supported by this library: `1.4.0`, `1.4.1`, and
-//! `1.5.0`. Older versions are not supported, but may be added if there is reason to do so. This
-//! library attempts to normalize data across versions by "upgrading" all documents to match the
-//! `1.5.0` specification. This removes the need for client code to be aware of the specification
-//! version used by documents it handles. This conversion is done transparently without the need
-//! for user specification.
+//! `1.5.0`. Version `1.4.0` documents are automatically handled like `1.4.1`, so users of this
+//! library never need to worry about the distinction. Version `1.5` is not compatible with
+//! version `1.4`, so the two are handled separately. As such, `1.4` documents are represented
+//! by [`v1_4::Collada`] and the types in the [`v1_4`] module, and `1.5` documents are represented
+//! by [`v1_5::Collada`] and the types in the [`v1_5`] module.
 //!
-//! Where possible this documentation will include notes on how a given element is handled
-//! differently between different COLLADA versions. This is to aid in debugging cases where a
-//! document fails to parse due to version constraints. For example, a document may fail to parse
-//! with an error "<asset> has an unexpected child <author_email>" even though `author_email` *is*
-//! a supported child for `asset`. `author_email` wasn't added until `1.5.0`, though, so a document
-//! using version `1.4.0` or `1.4.1` will fail to parse. Making this version information readily
-//! available reduces the need to sift through the full COLLADA specification when debugging.
+//! Do avoid having to know the version of the document before you load it, you can use
+//! [`VersionedDocument`] to detect the version and parse the document into the correct type.
+//! COLLABORATE makes no effort to unify incompatible versions of the specification, so users of
+//! COLLABORATE will have to handle both versions separately if they wish to do so.
 //!
 //! # 3rd Party Extensions
 //!
@@ -55,29 +80,189 @@
 //!
 //! [COLLADA]: https://www.khronos.org/collada/
 //! [FBX]: https://en.wikipedia.org/wiki/FBX
-//! [`Collada`]: struct.Collada.html
-//! [`Collada::read`]: struct.Collada.html#method.read
+//! [`VersionedDocument`]: ./enum.VersionedDocument.html
+//! [`VersionedDocument::read`]: ./enum.VersionedDocument.html#method.read
+//! [`v1_4`]: ./v1_4/index.html
+//! [`v1_5`]: ./v1_5/index.html
+//! [`v1_4::Collada`]: ./v1_4/struct.Collada.html
+//! [`v1_5::Collada`]: ./v1_5/struct.Collada.html
 
 pub extern crate chrono;
 #[macro_use]
 extern crate collaborate_derive;
 extern crate xml;
 
-pub use v1_5::*;
 pub use xml::common::TextPosition;
 pub use xml::reader::{Error as XmlError, XmlEvent};
 
-use chrono::*;
 use std::fmt::{self, Display, Formatter};
 use std::io::Read;
 use std::num::ParseFloatError;
-use utils::{ColladaElement, ElementStart, StringListDisplay};
+use utils::{ColladaElement, StringListDisplay};
 use xml::common::Position;
-use xml::EventReader;
+use xml::reader::EventReader;
+
+pub mod common;
+pub mod v1_4;
+pub mod v1_5;
 
 mod utils;
-mod v1_4;
-mod v1_5;
+
+/// A helper type for parsing documents without knowing the version ahead of time.
+///
+/// If you know the specification used by a COLLADA document ahead of time, you can use
+/// [`v1_4::Collada`] to load `1.4.0` and `1.4.1` documents, and [`v1_5::Collada`] to load `1.5.0`
+/// documents. If, on the other hand, you don't know what version the document uses, then you
+/// can use `VersionedDocument` to detect which version to use.
+///
+/// # Examples
+///
+/// ```
+/// # #![allow(unused_variables)]
+/// use std::fs::File;
+/// use collaborate::VersionedDocument;
+///
+/// let file = File::open("resources/blender_cube.dae").unwrap();
+/// match VersionedDocument::read(file).unwrap() {
+///     VersionedDocument::V1_4(document) => {
+///         println!("Loaded a 1.4.1 document: {:?}", document);
+///     }
+///
+///     VersionedDocument::V1_5(document) => {
+///         println!("Loaded a 1.5.0 document: {:?}", document);
+///     }
+/// }
+/// ```
+///
+/// [`v1_4::Collada`]: ./v1_4/struct.Collada.html
+/// [`v1_5::Collada`]: ./v1_5/struct.Collada.html
+#[derive(Debug, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
+pub enum VersionedDocument {
+    /// A `1.4.0` or `1.4.1` document.
+    V1_4(v1_4::Collada),
+
+    /// A `1.5.0` document.
+    V1_5(v1_5::Collada),
+}
+
+impl VersionedDocument {
+    /// Read a COLLADA document from a string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// use collaborate::VersionedDocument;
+    ///
+    /// static DOCUMENT: &'static str = r#"
+    ///     <?xml version="1.0" encoding="utf-8"?>
+    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    ///         <asset>
+    ///             <created>2017-02-07T20:44:30Z</created>
+    ///             <modified>2017-02-07T20:44:30Z</modified>
+    ///         </asset>
+    ///     </COLLADA>
+    /// "#;
+    ///
+    /// match VersionedDocument::from_str(DOCUMENT).unwrap() {
+    ///     VersionedDocument::V1_4(document) => {
+    ///         println!("Document contents: {:?}", document);
+    ///     }
+    ///
+    ///     _ => panic!("Impossible, the document version was 1.4.1"),
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the document is invalid or malformed in some way. For details about
+    /// COLLADA versions, 3rd party extensions, and any other details that could influence how
+    /// a document is parsed see the [crate-level documentation](./index.html).
+    pub fn from_str(source: &str) -> Result<VersionedDocument> {
+        let reader = EventReader::new_with_config(source.as_bytes(), utils::PARSER_CONFIG.clone());
+        Self::parse(reader)
+    }
+
+    /// Attempts to parse the contents of a COLLADA document.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// use std::fs::File;
+    /// use collaborate::VersionedDocument;
+    ///
+    /// let file = File::open("resources/blender_cube.dae").unwrap();
+    /// match VersionedDocument::read(file).unwrap() {
+    ///     VersionedDocument::V1_4(document) => {
+    ///         println!("Loaded a 1.4.1 document: {:?}", document);
+    ///     }
+    ///
+    ///     VersionedDocument::V1_5(document) => {
+    ///         println!("Loaded a 1.5.0 document: {:?}", document);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the document is invalid or malformed in some way. For details about
+    /// COLLADA versions, 3rd party extensions, and any other details that could influence how
+    /// a document is parsed see the [crate-level documentation][crate].
+    ///
+    /// [crate]: index.html
+    pub fn read<R: Read>(reader: R) -> Result<VersionedDocument> {
+        let reader = EventReader::new_with_config(reader, utils::PARSER_CONFIG.clone());
+        Self::parse(reader)
+    }
+
+    pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<VersionedDocument> {
+        // Get the opening `<COLLADA>` tag and find the "version" attribute.
+        let element_start = utils::get_document_start(&mut reader)?;
+        let version = element_start.attributes.iter()
+            .find(|attrib| attrib.name.local_name == "version")
+            .map(|attrib| attrib.value.clone())
+            .ok_or(Error {
+                position: reader.position(),
+                kind: ErrorKind::MissingAttribute {
+                    element: "COLLADA",
+                    attribute: "version",
+                },
+            })?;
+
+        match &*version {
+            "1.4.0" | "1.4.1" => {
+                v1_4::Collada::parse_element(&mut reader, element_start).map(Into::into)
+            }
+
+            "1.5.0" => {
+                v1_5::Collada::parse_element(&mut reader, element_start).map(Into::into)
+            }
+
+            _ => {
+                Err(Error {
+                    position: reader.position(),
+                    kind: ErrorKind::UnsupportedVersion {
+                        version: version,
+                    },
+                })
+            }
+        }
+    }
+}
+
+impl From<v1_4::Collada> for VersionedDocument {
+    fn from(from: v1_4::Collada) -> VersionedDocument {
+        VersionedDocument::V1_4(from)
+    }
+}
+
+impl From<v1_5::Collada> for VersionedDocument {
+    fn from(from: v1_5::Collada) -> VersionedDocument {
+        VersionedDocument::V1_5(from)
+    }
+}
 
 /// A COLLADA parsing error.
 ///
@@ -348,305 +533,3 @@ impl Display for ErrorKind {
 /// [std::result::Result]: https://doc.rust-lang.org/std/result/enum.Result.html
 /// [Error]: struct.Error.html
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// A URI in the COLLADA document.
-///
-/// Represents the [`xs:anyURI`][anyURI] XML data type.
-///
-/// [anyURI]: http://www.datypic.com/sc/xsd/t-xsd_anyURI.html
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AnyUri(String);
-
-impl From<String> for AnyUri {
-    fn from(from: String) -> AnyUri {
-        AnyUri(from)
-    }
-}
-
-// TODO: Actually parse the string and verify that it's a valid URI.
-impl ::std::str::FromStr for AnyUri {
-    type Err = ::std::string::ParseError;
-
-    fn from_str(string: &str) -> ::std::result::Result<AnyUri, ::std::string::ParseError> {
-        Ok(AnyUri(string.into()))
-    }
-}
-
-/// Describes the coordinate system for an [`Asset`][Asset].
-///
-/// All coordinates in a COLLADA document are right-handed, so describing the up axis alone is
-/// enough to determine the other two axis. The table below shows all three possibilites:
-///
-/// | Value       | Right Axis | Up Axis    | In Axis    |
-/// |-------------|------------|------------|------------|
-/// | `UpAxis::X` | Negative Y | Positive X | Positive Z |
-/// | `UpAxis::Y` | Positive X | Positive Y | Positive Z |
-/// | `UpAxis::Z` | Positive X | Positive Z | Negative Y |
-///
-/// [Asset]: struct.Asset.html
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UpAxis {
-    X,
-    Y,
-    Z,
-}
-
-impl ColladaElement for UpAxis {
-    fn name_test(name: &str) -> bool {
-        name == "up_axis"
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<UpAxis>
-    where
-        R: Read,
-    {
-        utils::verify_attributes(reader, "up_axis", element_start.attributes)?;
-        let text: String = utils::optional_text_contents(reader, "up_axis")?.unwrap_or_default();
-        let parsed = match &*text {
-            "X_UP" => { UpAxis::X }
-            "Y_UP" => { UpAxis::Y }
-            "Z_UP" => { UpAxis::Z }
-            _ => {
-                return Err(Error {
-                    position: reader.position(),
-                    kind: ErrorKind::InvalidValue {
-                        element: "up_axis".into(),
-                        value: text,
-                    },
-                });
-            }
-        };
-
-        Ok(parsed)
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        names.push("up_axis");
-    }
-}
-
-impl Default for UpAxis {
-    fn default() -> UpAxis { UpAxis::Y }
-}
-
-/// Defines the unit of distance for an [`Asset`][Asset].
-///
-/// The unit of distance applies to all spatial measurements for the [`Asset`][Asset], unless
-/// overridden by a more local `Unit`. A `Unit` is self-describing, providing both its name and
-/// length in meters, and does not need to be consistent with any real-world measurement.
-///
-/// [Asset]: struct.Asset.html
-#[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "unit"]
-pub struct Unit {
-    /// The name of the distance unit. For example, “meter”, “centimeter”, “inch”, or “parsec”.
-    /// This can be the name of a real measurement, or an imaginary name. Defaults to `1.0`.
-    #[attribute]
-    #[text_data]
-    pub meter: f64,
-
-    /// How many real-world meters in one distance unit as a floating-point number. For example,
-    /// 1.0 for the name "meter"; 1000 for the name "kilometer"; 0.3048 for the name
-    /// "foot". Defaults to "meter".
-    #[attribute]
-    pub name: String,
-}
-
-impl Default for Unit {
-    fn default() -> Unit {
-        Unit {
-            meter: 1.0,
-            name: "meter".into(),
-        }
-    }
-}
-
-/// A datetime value, with or without a timezone.
-///
-/// Timestamps in a COLLADA document adhere to [ISO 8601][ISO 8601], which specifies a standard
-/// format for writing a date and time value, with or without a timezone. Since the timezone
-/// component is optional, the `DateTime` object will preserve the timezone if one was specified,
-/// or it will be considered a "naive" datetime if it does not.
-///
-/// The [`chrono`][chrono] crate is used for handling datetime types, and its API is re-exported
-/// for convenience.
-///
-/// [ISO 8601]: https://en.wikipedia.org/wiki/ISO_8601
-/// [chrono]: https://docs.rs/chrono
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DateTime {
-    /// A timestamp with a known timezone, specified as a fixed offset from UTC.
-    Utc(chrono::DateTime<FixedOffset>),
-
-    /// A timestamp with no timezone.
-    Naive(NaiveDateTime),
-}
-
-impl ::std::str::FromStr for DateTime {
-    type Err = chrono::ParseError;
-
-    fn from_str(source: &str) -> ::std::result::Result<DateTime, chrono::ParseError> {
-        source
-            .parse()
-            .map(|datetime| DateTime::Utc(datetime))
-            .or_else(|_| {
-                NaiveDateTime::from_str(source).map(|naive| DateTime::Naive(naive))
-            })
-    }
-}
-
-/// Provides arbitrary additional information about an element.
-///
-/// COLLADA allows for applications to provide extra information about any given piece of data,
-/// including application-specific information that's not part of the COLLADA specification. This
-/// data can be any syntactically valid XML data, and is not parsed as part of this library, save
-/// for a few specific 3rd party applications that are directly supported.
-///
-/// # Choosing a Technique
-///
-/// There may be more than one [`Technique`][Technique] provided in `techniques`, but generally
-/// only one is used by the consuming application. The application should pick a technique
-/// with a supported profile. If there are multiple techniques with supported profiles the
-/// application is free to pick whichever technique is preferred.
-///
-/// [Technique]: struct.Technique.html
-#[derive(Debug, Clone, Default, PartialEq, ColladaElement)]
-#[name = "extra"]
-pub struct Extra {
-    /// The identifier of the element, if present. Will be unique within the document.
-    #[attribute]
-    pub id: Option<String>,
-
-    /// The text string name of the element, if present.
-    #[attribute]
-    pub name: Option<String>,
-
-    /// A hint as to the type of information this element represents, if present. Must be
-    /// must be understood by the consuming application.
-    #[attribute]
-    #[name = "type"]
-    pub type_hint: Option<String>,
-
-    /// Asset-management information for this element, if present.
-    ///
-    /// While this is technically allowed in all `<extra>` elements, it is likely only present in
-    /// elements that describe a new "asset" of some kind, rather than in `<extra>` elements that
-    /// provide application-specific information about an existing one.
-    #[child]
-    pub asset: Option<Asset>,
-
-    /// The arbitrary additional information, containing unprocessed XML events. There will always
-    /// be at least one item in `techniques`.
-    #[child]
-    #[required]
-    pub techniques: Vec<Technique>,
-}
-
-/// Arbitrary additional information represented as XML events.
-///
-/// ```txt
-/// TODO: Provide more information about processing techniques.
-/// ```
-#[derive(Debug, Clone, PartialEq)]
-pub struct Technique {
-    /// A vendor-defined string that indicates the platform or capability target for the technique.
-    /// Consuming applications need not support all (or any) profiles, and can safely ignore
-    /// techniques with unknown or unsupported profiles.
-    pub profile: String,
-
-    /// The schema used for validating the contents of the `<technique>` element.
-    ///
-    /// Currently, validation is not performed by this library, and is left up to the consuming
-    /// application.
-    pub xmlns: Option<AnyUri>,
-
-    /// The raw XML events for the data contained within the technique. These events do not contain
-    /// the `StartElement` and `EndElement` events for the `<technique>` element itself. As such,
-    /// the contents of `data` do not represent a valid XML document, as they may not have a single
-    /// root element.
-    pub data: Vec<XmlEvent>,
-}
-
-impl ColladaElement for Technique {
-    fn name_test(name: &str) -> bool {
-        name == "technique"
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<Technique>
-    where
-        R: Read,
-    {
-        let mut profile = None;
-        let mut xmlns = None;
-        let mut data = Vec::default();
-
-        for attribute in element_start.attributes {
-            match &*attribute.name.local_name {
-                "profile" => { profile = Some(attribute.value); }
-
-                "xmlns" => { xmlns = Some(attribute.value.into()); }
-
-                _ => {
-                    return Err(Error {
-                        position: reader.position(),
-                        kind: ErrorKind::UnexpectedAttribute {
-                            element: "technique",
-                            attribute: attribute.name.local_name.clone(),
-                            expected: vec!["profile", "xmlns"],
-                        },
-                    });
-                }
-            }
-        }
-
-        let profile = match profile {
-            Some(profile) => { profile }
-
-            None => {
-                return Err(Error {
-                    position: reader.position(),
-                    kind: ErrorKind::MissingAttribute {
-                        element: "technique",
-                        attribute: "profile",
-                    },
-                });
-            }
-        };
-
-        let mut depth = 0;
-        loop {
-            let event = reader.next()?;
-            match event {
-                XmlEvent::StartElement { ref name, .. } if name.local_name == "technique" => { depth += 1; }
-
-                XmlEvent::EndElement { ref name } if name.local_name == "technique" => {
-                    if depth == 0 {
-                        break;
-                    } else {
-                        depth -= 1;
-                    }
-                }
-
-                _ => {}
-            }
-
-            data.push(event);
-        }
-
-        Ok(Technique {
-            profile: profile,
-            xmlns: xmlns,
-            data: data,
-        })
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        names.push("technique");
-    }
-}

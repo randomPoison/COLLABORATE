@@ -1,63 +1,46 @@
-use {AnyUri, DateTime, Extra, Result, Error, ErrorKind, Unit, UpAxis, utils};
+//! Type definitions matching the COLLADA `1.5.0` specification.
+
+use {Result, Error, ErrorKind};
+use common::*;
 use std::io::Read;
+use utils;
 use utils::*;
-use utils::ChildOccurrences::*;
 use xml::common::Position;
 use xml::reader::EventReader;
-use xml::reader::XmlEvent::*;
-
-/// The logic behind parsing the COLLADA document.
-///
-/// `from_str()` and `read()` just create the `xml::EventReader` and then defer to `parse()`.
-///
-/// TODO: This is currently publicly exported. That shouldn't happen.
-pub fn collaborate<R: Read>(mut reader: EventReader<R>, version: String, base: Option<AnyUri>) -> Result<Collada> {
-    // The next event must be the `<asset>` tag. No text data is allowed, and
-    // whitespace/comments aren't emitted.
-    let start_element = utils::required_start_element(&mut reader, "COLLADA", "asset")?;
-    let asset = Asset::parse_element(&mut reader, start_element)?;
-
-    // Eat any events until we get to the `</COLLADA>` tag.
-    // TODO: Actually parse the body of the document.
-    loop {
-        match reader.next()? {
-            EndElement { ref name } if name.local_name == "COLLADA" => { break }
-            _ => {}
-        }
-    }
-
-    // TODO: Verify the next event is the `EndDocument` event.
-    match reader.next()? {
-        EndDocument => {}
-
-        // Same logic here as with the starting event. The only things that can come after the
-        // close tag are comments, white space, and processing instructions, all of which we
-        // ignore. This can change with future versions of xml-rs, though.
-        event @ _ => { panic!("Unexpected event: {:?}", event); }
-    }
-
-    Ok(Collada {
-        version: version,
-        asset: asset,
-        base_uri: base,
-    })
-}
 
 /// Represents a parsed COLLADA document.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "COLLADA"]
 pub struct Collada {
     /// The version string for the COLLADA specification used by the document.
     ///
     /// Only "1.4.0", "1.4.1", and "1.5.0" are supported currently.
+    #[attribute]
     pub version: String,
+
+    // Included for completeness in parsing, not actually used.
+    #[attribute]
+    pub xmlns: Option<String>,
 
     /// The base uri for any relative URIs in the document.
     ///
     /// Specified by the `base` attribute on the root `<COLLADA>` element.
+    #[attribute]
+    #[name = "base"]
     pub base_uri: Option<AnyUri>,
 
     /// Global metadata about the COLLADA document.
+    #[child]
     pub asset: Asset,
+
+    #[child]
+    pub libraries: Vec<Library>,
+
+    #[child]
+    pub scene: Option<Scene>,
+
+    #[child]
+    pub extras: Vec<Extra>,
 }
 
 impl Collada {
@@ -67,11 +50,11 @@ impl Collada {
     ///
     /// ```
     /// # #![allow(unused_variables)]
-    /// use collaborate::Collada;
+    /// use collaborate::v1_5::Collada;
     ///
     /// static DOCUMENT: &'static str = r#"
     ///     <?xml version="1.0" encoding="utf-8"?>
-    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.5.0">
     ///         <asset>
     ///             <created>2017-02-07T20:44:30Z</created>
     ///             <modified>2017-02-07T20:44:30Z</modified>
@@ -91,7 +74,7 @@ impl Collada {
     /// [crate]: index.html
     pub fn from_str(source: &str) -> Result<Collada> {
         let reader = EventReader::new_with_config(source.as_bytes(), utils::PARSER_CONFIG.clone());
-        utils::parse(reader)
+        Self::parse(reader)
     }
 
     /// Attempts to parse the contents of a COLLADA document.
@@ -101,9 +84,9 @@ impl Collada {
     /// ```
     /// # #![allow(unused_variables)]
     /// use std::fs::File;
-    /// use collaborate::Collada;
+    /// use collaborate::v1_5::Collada;
     ///
-    /// let file = File::open("resources/blender_cube.dae").unwrap();
+    /// let file = File::open("resources/v1_5_minimal.dae").unwrap();
     /// let collada = Collada::read(file).unwrap();
     /// ```
     ///
@@ -116,7 +99,33 @@ impl Collada {
     /// [crate]: index.html
     pub fn read<R: Read>(reader: R) -> Result<Collada> {
         let reader = EventReader::new_with_config(reader, utils::PARSER_CONFIG.clone());
-        utils::parse(reader)
+        Self::parse(reader)
+    }
+
+    pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<Collada> {
+        // Get the opening `<COLLADA>` tag and find the "version" attribute.
+        let element_start = utils::get_document_start(&mut reader)?;
+        let version = element_start.attributes.iter()
+            .find(|attrib| attrib.name.local_name == "version")
+            .map(|attrib| attrib.value.clone())
+            .ok_or(Error {
+                position: reader.position(),
+                kind: ErrorKind::MissingAttribute {
+                    element: "COLLADA",
+                    attribute: "version",
+                },
+            })?;
+
+        if version != "1.5.0" {
+            return Err(Error {
+                position: reader.position(),
+                kind: ErrorKind::UnsupportedVersion {
+                    version: version,
+                },
+            });
+        }
+
+        Collada::parse_element(&mut reader, element_start)
     }
 }
 
@@ -128,42 +137,53 @@ impl Collada {
 /// # COLLADA Versions
 ///
 /// `coverage` and `extras` were added in COLLADA version `1.5.0`.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "asset"]
 pub struct Asset {
     /// The list of contributors who worked on the asset.
+    #[child]
     pub contributors: Vec<Contributor>,
 
     /// Specifies the location of the visual scene in physical space.
-    pub coverage: Option<GeographicLocation>,
+    #[child]
+    pub coverage: Option<Coverage>,
 
     /// Specifies the date and time that the asset was created.
+    #[child]
     pub created: DateTime,
 
     /// A list of keywords used as search criteria for the asset.
+    #[child]
     pub keywords: Option<String>,
 
     /// Contains the date and time that the parent element was last modified.
+    #[child]
     pub modified: DateTime,
 
     /// Contains revision information about the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub revision: Option<String>,
 
     /// Contains a description of the topical subject of the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub subject: Option<String>,
 
     /// Contains title information for the asset.
     ///
     /// This field is free-form, with no formatting required by the COLLADA specification.
+    #[child]
     pub title: Option<String>,
 
     /// Defines the unit of distance for this asset.
     ///
     /// This unit is used by the asset and all of its children, unless overridden by a more
     /// local `Unit`.
+    #[child]
+    #[optional_with_default]
     pub unit: Unit,
 
     /// Describes the coordinate system of the asset.
@@ -171,6 +191,8 @@ pub struct Asset {
     /// See the documentation for [`UpAxis`] for more details.
     ///
     /// [`UpAxis`]: ../struct.UpAxis.html
+    #[child]
+    #[optional_with_default]
     pub up_axis: UpAxis,
 
     /// Provides arbitrary additional data about the asset.
@@ -178,282 +200,15 @@ pub struct Asset {
     /// See the [`Extra`] documentation for more information.
     ///
     /// [`Extra`]: ./struct.Extra.html
+    #[child]
     pub extras: Vec<Extra>,
 }
 
-// We need a custom implementation of `ColladaElement` for `Asset` to handle `<coverage>` in a
-// user-friendly way. According to the COLLADA spec, `<coverage>` is optional, and only has a
-// single, optional `<geographic_location>` child. This double-optional setup is a bit odd, and
-// ultimately isn't important to expose to the end user, so we collapse both down into a single
-// `Option<GeographicLocation>`. Unfortunately, handling this requires writing some one-off
-// parsing code to collapse the structure into what we want the end user to see. If this turns
-// out to be a common pattern in COLLADA, we should add direct support for handling it to
-// `parse-collada-derive`.
-impl ColladaElement for Asset {
-    fn name_test(name: &str) -> bool {
-        name == "asset"
-    }
-
-    fn parse_element<R>(
-        reader: &mut EventReader<R>,
-        element_start: ElementStart,
-    ) -> Result<Asset>
-    where
-        R: Read,
-    {
-        utils::verify_attributes(reader, "asset", element_start.attributes)?;
-
-        let mut contributors = Vec::default();
-        let mut coverage = None;
-        let mut created = None;
-        let mut keywords = None;
-        let mut modified = None;
-        let mut revision = None;
-        let mut subject = None;
-        let mut title = None;
-        let mut unit = None;
-        let mut up_axis = None;
-        let mut extras = Vec::default();
-
-        ElementConfiguration {
-            name: "asset",
-            children: &mut [
-                ChildConfiguration {
-                    name: &|name| { name == "contributor" },
-                    occurrences: Many,
-
-                    action: &mut |reader, element_start| {
-                        let contributor = Contributor::parse_element(reader, element_start)?;
-                        contributors.push(contributor);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("contributor"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "coverage" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "coverage", element_start.attributes)?;
-
-                        ElementConfiguration {
-                            name: "coverage",
-                            children: &mut [
-                                ChildConfiguration {
-                                    name: &|name| { name == "geographic_location" },
-                                    occurrences: Optional,
-
-                                    action: &mut |reader, element_start| {
-                                        coverage = Some(GeographicLocation::parse_element(
-                                            reader,
-                                            element_start,
-                                        )?);
-                                        Ok(())
-                                    },
-
-                                    add_names: &|names| { names.push("geographic_location"); },
-                                }
-                            ],
-                        }.parse_children(reader)
-                    },
-
-                    add_names: &|names| { names.push("coverage"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "created" },
-                    occurrences: Required,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "created", element_start.attributes)?;
-                        created = utils::optional_text_contents(reader, "created")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("created"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "keywords" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "keywords", element_start.attributes)?;
-                        keywords = utils::optional_text_contents::<_, String>(reader, "keywords")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("keywords"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "modified" },
-                    occurrences: Required,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "modified", element_start.attributes)?;
-                        modified = utils::optional_text_contents(reader, "modified")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("modified"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "revision" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "revision", element_start.attributes)?;
-                        revision = utils::optional_text_contents(reader, "revision")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("revision"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "subject" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "subject", element_start.attributes)?;
-                        subject = utils::optional_text_contents(reader, "subject")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("subject"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "title" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "title", element_start.attributes)?;
-                        title = utils::optional_text_contents(reader, "title")?;
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("title"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "unit" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        let mut unit_attrib = None;
-                        let mut meter_attrib = None;
-
-                        for attribute in element_start.attributes {
-                            match &*attribute.name.local_name {
-                                "name" => {
-                                    // TODO: Validate that this follows the xsd:NMTOKEN format.
-                                    // http://www.datypic.com/sc/xsd/t-xsd_NMTOKEN.html
-                                    unit_attrib = Some(attribute.value);
-                                }
-
-                                "meter" => {
-                                    let parsed = attribute.value
-                                        .parse()
-                                        .map_err(|error| {
-                                            Error {
-                                                position: reader.position(),
-                                                kind: ErrorKind::ParseFloatError(error),
-                                            }
-                                        })?;
-                                    meter_attrib = Some(parsed);
-                                }
-
-                                attrib_name @ _ => {
-                                    return Err(Error {
-                                        position: reader.position(),
-                                        kind: ErrorKind::UnexpectedAttribute {
-                                            element: "unit",
-                                            attribute: attrib_name.into(),
-                                            expected: vec!["unit", "meter"],
-                                        },
-                                    })
-                                }
-                            }
-                        }
-
-                        unit = Some(Unit {
-                            meter: meter_attrib.unwrap_or(1.0),
-                            name: unit_attrib.unwrap_or_else(|| "meter".into()),
-                        });
-
-                        utils::end_element(reader, "unit")
-                    },
-
-                    add_names: &|names| { names.push("unit"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "up_axis" },
-                    occurrences: Optional,
-
-                    action: &mut |reader, element_start| {
-                        utils::verify_attributes(reader, "up_axis", element_start.attributes)?;
-                        let text: String = utils::optional_text_contents(reader, "up_axis")?.unwrap_or_default();
-                        let parsed = match &*text {
-                            "X_UP" => { UpAxis::X }
-                            "Y_UP" => { UpAxis::Y }
-                            "Z_UP" => { UpAxis::Z }
-                            _ => {
-                                return Err(Error {
-                                    position: reader.position(),
-                                    kind: ErrorKind::InvalidValue {
-                                        element: "up_axis".into(),
-                                        value: text,
-                                    },
-                                });
-                            }
-                        };
-
-                        up_axis = Some(parsed);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("up_axis"); },
-                },
-
-                ChildConfiguration {
-                    name: &|name| { name == "extra" },
-                    occurrences: Many,
-
-                    action: &mut |reader, element_start| {
-                        let extra = Extra::parse_element(reader, element_start)?;
-                        extras.push(extra);
-                        Ok(())
-                    },
-
-                    add_names: &|names| { names.push("extra"); },
-                }
-            ],
-        }.parse_children(reader)?;
-
-        Ok(Asset {
-            contributors: contributors,
-            coverage: coverage,
-            created: created.expect("Required element was not found"),
-            keywords: keywords,
-            modified: modified.expect("Required element was not found"),
-            revision: revision,
-            subject: subject,
-            title: title,
-            unit: unit.unwrap_or_default(),
-            up_axis: up_axis.unwrap_or_default(),
-            extras: extras,
-        })
-    }
-
-    fn add_names(names: &mut Vec<&'static str>) {
-        names.push("asset");
-    }
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "coverage"]
+pub struct Coverage {
+    #[child]
+    pub geographic_location: Option<GeographicLocation>,
 }
 
 /// Information about a contributor to an asset.
@@ -505,6 +260,53 @@ pub struct Contributor {
     pub source_data: Option<AnyUri>,
 }
 
+/// Provides arbitrary additional information about an element.
+///
+/// COLLADA allows for applications to provide extra information about any given piece of data,
+/// including application-specific information that's not part of the COLLADA specification. This
+/// data can be any syntactically valid XML data, and is not parsed as part of this library, save
+/// for a few specific 3rd party applications that are directly supported.
+///
+/// # Choosing a Technique
+///
+/// There may be more than one [`Technique`][Technique] provided in `techniques`, but generally
+/// only one is used by the consuming application. The application should pick a technique
+/// with a supported profile. If there are multiple techniques with supported profiles the
+/// application is free to pick whichever technique is preferred.
+///
+/// [Technique]: struct.Technique.html
+#[derive(Debug, Clone, Default, PartialEq, ColladaElement)]
+#[name = "extra"]
+pub struct Extra {
+    /// The identifier of the element, if present. Will be unique within the document.
+    #[attribute]
+    pub id: Option<String>,
+
+    /// The text string name of the element, if present.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// A hint as to the type of information this element represents, if present. Must be
+    /// must be understood by the consuming application.
+    #[attribute]
+    #[name = "type"]
+    pub type_hint: Option<String>,
+
+    /// Asset-management information for this element, if present.
+    ///
+    /// While this is technically allowed in all `<extra>` elements, it is likely only present in
+    /// elements that describe a new "asset" of some kind, rather than in `<extra>` elements that
+    /// provide application-specific information about an existing one.
+    #[child]
+    pub asset: Option<Asset>,
+
+    /// The arbitrary additional information, containing unprocessed XML events. There will always
+    /// be at least one item in `techniques`.
+    #[child]
+    #[required]
+    pub techniques: Vec<Technique>,
+}
+
 /// Defines geographic location information for an [`Asset`][Asset].
 ///
 /// A geographic location is given in latitude, longitude, and altitude coordinates as defined by
@@ -529,6 +331,114 @@ pub struct GeographicLocation {
     #[child]
     pub altitude: Altitude,
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Library {
+    Animations(LibraryAnimations),
+    AnimationClips(LibraryAnimationClips),
+    ArticulatedSystmes(LibraryArticulatedSystems),
+    Cameras(LibraryCameras),
+    Controllers(LibraryControllers),
+    Effects(LibraryEffects),
+    ForceFields(LibraryForceFields),
+    Formulas(LibraryFormulas),
+    Geometries(LibraryGeometries),
+    Images(LibraryImages),
+    Joints(LibraryJoints),
+    KinematicsModels(LibraryKinematicsModels),
+    KinematicsScenes(LibraryKinematicsScenes),
+    Lights(LibraryLights),
+    Materials(LibraryMaterials),
+    Nodes(LibraryNodes),
+    PhysicsMaterials(LibraryPhysicsMaterials),
+    PhysicsModels(LibraryPhysicsModels),
+    PhysicsScenes(LibraryPhysicsScenes),
+    VisualScenes(LibraryVisualScenes),
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animations"]
+pub struct LibraryAnimations;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_animation_clips"]
+pub struct LibraryAnimationClips;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_articulated_systems"]
+pub struct LibraryArticulatedSystems;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_cameras"]
+pub struct LibraryCameras;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_controllers"]
+pub struct LibraryControllers;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_effects"]
+pub struct LibraryEffects;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_force_fields"]
+pub struct LibraryForceFields;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_formulas"]
+pub struct LibraryFormulas;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_geometries"]
+pub struct LibraryGeometries;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_images"]
+pub struct LibraryImages;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_joints"]
+pub struct LibraryJoints;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_kinematics_models"]
+pub struct LibraryKinematicsModels;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_kinematics_scenes"]
+pub struct LibraryKinematicsScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_lights"]
+pub struct LibraryLights;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_materials"]
+pub struct LibraryMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_nodes"]
+pub struct LibraryNodes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_materials"]
+pub struct LibraryPhysicsMaterials;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_models"]
+pub struct LibraryPhysicsModels;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_physics_scenes"]
+pub struct LibraryPhysicsScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "library_visual_scenes"]
+pub struct LibraryVisualScenes;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "scene"]
+pub struct Scene;
 
 /// Specifies the altitude of a [`GeographicLocation`][GeographicLocation].
 ///

@@ -1,6 +1,8 @@
 extern crate collaborate;
 
 use ::collaborate::*;
+use ::collaborate::common::*;
+use ::collaborate::v1_4::*;
 
 #[test]
 fn blender_cube() {
@@ -25,10 +27,10 @@ fn collada_asset_minimal() {
 
     let expected = Collada {
         version: "1.4.1".into(),
+        xmlns: None,
         base_uri: None,
         asset: Asset {
             contributors: vec![],
-            coverage: None,
             created: "2017-02-07T20:44:30Z".parse().unwrap(),
             keywords: None,
             modified: "2017-02-07T20:44:30Z".parse().unwrap(),
@@ -40,8 +42,10 @@ fn collada_asset_minimal() {
                 name: "meter".into(),
             },
             up_axis: UpAxis::Y,
-            extras: vec![],
         },
+        libraries: Vec::new(),
+        scene: None,
+        extras: Vec::new(),
     };
 
     let actual = Collada::from_str(DOCUMENT).unwrap();
@@ -91,7 +95,6 @@ fn asset_full() {
 
     let expected = Asset {
         contributors: vec![Contributor::default(), Contributor::default(), Contributor::default()],
-        coverage: None,
         created: "2017-02-07T20:44:30Z".parse().unwrap(),
         keywords: Some("foo bar baz".into()),
         modified: "2017-02-07T20:44:30Z".parse().unwrap(),
@@ -103,7 +106,6 @@ fn asset_full() {
             name: "septimeter".into(),
         },
         up_axis: UpAxis::Z,
-        extras: Vec::default(),
     };
 
     let collada = Collada::from_str(DOCUMENT).unwrap();
@@ -136,7 +138,6 @@ fn asset_blender() {
                 .. Contributor::default()
             },
         ],
-        coverage: None,
         created: "2017-02-01T09:29:54".parse().unwrap(),
         keywords: None,
         modified: "2017-02-01T09:29:54".parse().unwrap(),
@@ -148,7 +149,6 @@ fn asset_blender() {
             name: "meter".into(),
         },
         up_axis: UpAxis::Z,
-        extras: Vec::default(),
     };
 
     let collada = Collada::from_str(DOCUMENT).unwrap();
@@ -234,8 +234,6 @@ fn contributor_full() {
 
     let expected = Contributor {
         author: Some("David LeGare".into()),
-        author_email: None,
-        author_website: None,
         authoring_tool: Some("Atom".into()),
         comments: Some("This is a sample COLLADA document.".into()),
         copyright: Some("David LeGare, free for public use".into()),

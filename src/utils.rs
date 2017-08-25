@@ -1,4 +1,4 @@
-use {AnyUri, Result, Error, ErrorKind, v1_4, v1_5};
+use {Result, Error, ErrorKind};
 use self::ChildOccurrences::*;
 use std::fmt::{self, Display, Formatter};
 use std::io::Read;
@@ -155,9 +155,7 @@ pub struct ChildConfiguration<'a, R: 'a + Read> {
     pub add_names: &'a Fn(&mut Vec<&'static str>),
 }
 
-pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
-    pub static COLLADA_ATTRIBS: &'static [&'static str] = &["version", "xmlns", "base"];
-
+pub fn get_document_start<R: Read>(reader: &mut EventReader<R>) -> Result<ElementStart> {
     // Eat the `StartDocument` event. It has no useful information for our purposes, but it
     // will always be the first event emitted, even if there's no XML declaration at the
     // beginning of the document. This is defined as part of the xml-rs API as of v0.3.5,
@@ -194,114 +192,9 @@ pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<v1_5::Collada> {
         event @ _ => { panic!("Unexpected event: {:?}", event); }
     };
 
-    // Valide the attributes on the `<COLLADA>` tag.
-    // Use boolean flags to track if specific attributes have been encountered.
-    let mut version = None;
-    let mut base_uri = None;
-
-    for attribute in &element_start.attributes {
-        // NOTE: I'm using `if` blocks instead of `match` here because using `match`
-        // won't allow for the name to be moved out of `attribute`. Using `if` saves
-        // some unnecessary allocations. I expect at some point Rust will get smart
-        // enough that this will no longer be an issue, at which point we should
-        // change this to use `match`, as that keeps better with Rust best practices.
-        if attribute.name.local_name == "version" {
-            version = Some(attribute.value.clone());
-        } else if attribute.name.local_name == "base" {
-            // TODO: Do we need to validate the URI?
-            base_uri = Some(AnyUri(attribute.value.clone()));
-        } else {
-            return Err(Error {
-                position: reader.position(),
-                kind: ErrorKind::UnexpectedAttribute {
-                    element: "COLLADA",
-                    attribute: attribute.name.local_name.clone(),
-                    expected: COLLADA_ATTRIBS.into(),
-                },
-            })
-        }
-    }
-
-    // Verify that all required attributes have been found.
-    let version = match version {
-        Some(version) => { version }
-        None => {
-            return Err(Error {
-                position: reader.position(),
-                kind: ErrorKind::MissingAttribute {
-                    element: "COLLADA",
-                    attribute: "version",
-                },
-            })
-        }
-    };
-
-    if version == "1.4.0" || version == "1.4.1" {
-        v1_4::Collada::parse_element(&mut reader, element_start).map(Into::into)
-    } else if version == "1.5.0" {
-        v1_5::collaborate(reader, version, base_uri)
-    } else {
-        Err(Error {
-            position: reader.position(),
-            kind: ErrorKind::UnsupportedVersion {
-                version: version,
-            },
-        })
-    }
+    Ok(element_start)
 }
 
-pub fn required_start_element<R: Read>(
-    reader: &mut EventReader<R>,
-    parent: &'static str,
-    search_name: &'static str,
-) -> Result<ElementStart> {
-    match reader.next()? {
-        StartElement { name, attributes, namespace: _ } => {
-            if search_name != name.local_name {
-                return Err(Error {
-                    position: reader.position(),
-                    kind: ErrorKind::UnexpectedElement {
-                        element: name.local_name,
-                        parent: parent.into(),
-                        expected: vec![search_name],
-                    },
-                })
-            }
-
-            return Ok(ElementStart { name, attributes });
-        }
-
-        EndElement { name } => {
-            debug_assert_eq!(parent, name.local_name);
-
-            return Err(Error {
-                position: reader.position(),
-                kind: ErrorKind::MissingElement {
-                    parent: parent,
-                    expected: vec![search_name],
-                },
-            })
-        }
-
-        Characters(data) => {
-            return Err(Error {
-                position: reader.position(),
-                kind: ErrorKind::UnexpectedCharacterData {
-                    element: parent.into(),
-                    data: data,
-                }
-            })
-        }
-
-        ProcessingInstruction { .. } => { unimplemented!(); }
-
-        event @ _ => { panic!("Unexpected event: {:?}", event); }
-    }
-}
-
-// TODO: This should really be `optional_start_element` since it doesn't fail if no element starts,
-// but there's already a fn with that name. Once we unify the parsing code we can kill the old one
-// and fix the name of this one.
 pub fn start_element<R: Read>(
     reader: &mut EventReader<R>,
     parent: &'static str,

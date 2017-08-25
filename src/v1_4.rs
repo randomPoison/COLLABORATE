@@ -1,6 +1,12 @@
-use {AnyUri, DateTime, Error, ErrorKind, Extra, Result, Unit, UpAxis, utils, v1_5};
+//! Type definitions matching the COLLADA `1.4.1` specification.
+
+use {Error, ErrorKind, Result};
+use common::*;
+use std::io::Read;
+use utils;
 use utils::*;
 use xml::common::Position;
+use xml::reader::EventReader;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "COLLADA"]
@@ -12,7 +18,8 @@ pub struct Collada {
     pub xmlns: Option<String>,
 
     #[attribute]
-    pub base: Option<AnyUri>,
+    #[name = "base"]
+    pub base_uri: Option<AnyUri>,
 
     #[child]
     pub asset: Asset,
@@ -27,13 +34,89 @@ pub struct Collada {
     pub extras: Vec<Extra>,
 }
 
-impl Into<v1_5::Collada> for Collada {
-    fn into(self) -> v1_5::Collada {
-        v1_5::Collada {
-            version: self.version,
-            base_uri: self.base,
-            asset: self.asset.into(),
+impl Collada {
+    /// Read a COLLADA document from a string.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// use collaborate::v1_4::Collada;
+    ///
+    /// static DOCUMENT: &'static str = r#"
+    ///     <?xml version="1.0" encoding="utf-8"?>
+    ///     <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+    ///         <asset>
+    ///             <created>2017-02-07T20:44:30Z</created>
+    ///             <modified>2017-02-07T20:44:30Z</modified>
+    ///         </asset>
+    ///     </COLLADA>
+    /// "#;
+    ///
+    /// let collada = Collada::from_str(DOCUMENT).unwrap();
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the document is invalid or malformed in some way. For details about
+    /// COLLADA versions, 3rd party extensions, and any other details that could influence how
+    /// a document is parsed see the [crate-level documentation][crate].
+    ///
+    /// [crate]: index.html
+    pub fn from_str(source: &str) -> Result<Collada> {
+        let reader = EventReader::new_with_config(source.as_bytes(), utils::PARSER_CONFIG.clone());
+        Self::parse(reader)
+    }
+
+    /// Attempts to parse the contents of a COLLADA document.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// use std::fs::File;
+    /// use collaborate::v1_4::Collada;
+    ///
+    /// let file = File::open("resources/blender_cube.dae").unwrap();
+    /// let collada = Collada::read(file).unwrap();
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the document is invalid or malformed in some way. For details about
+    /// COLLADA versions, 3rd party extensions, and any other details that could influence how
+    /// a document is parsed see the [crate-level documentation][crate].
+    ///
+    /// [crate]: index.html
+    pub fn read<R: Read>(reader: R) -> Result<Collada> {
+        let reader = EventReader::new_with_config(reader, utils::PARSER_CONFIG.clone());
+        Self::parse(reader)
+    }
+
+    pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<Collada> {
+        // Get the opening `<COLLADA>` tag and find the "version" attribute.
+        let element_start = utils::get_document_start(&mut reader)?;
+        let version = element_start.attributes.iter()
+            .find(|attrib| attrib.name.local_name == "version")
+            .map(|attrib| attrib.value.clone())
+            .ok_or(Error {
+                position: reader.position(),
+                kind: ErrorKind::MissingAttribute {
+                    element: "COLLADA",
+                    attribute: "version",
+                },
+            })?;
+
+        if version != "1.4.0" && version != "1.4.1" {
+            return Err(Error {
+                position: reader.position(),
+                kind: ErrorKind::UnsupportedVersion {
+                    version: version,
+                },
+            });
         }
+
+        Collada::parse_element(&mut reader, element_start)
     }
 }
 
@@ -70,24 +153,6 @@ pub struct Asset {
     pub up_axis: UpAxis,
 }
 
-impl Into<v1_5::Asset> for Asset {
-    fn into(self) -> v1_5::Asset {
-        v1_5::Asset {
-            contributors: self.contributors.into_iter().map(Into::into).collect(),
-            coverage: None,
-            created: self.created,
-            keywords: self.keywords,
-            modified: self.modified,
-            revision: self.revision,
-            subject: self.subject,
-            title: self.title,
-            unit: self.unit,
-            up_axis: self.up_axis,
-            extras: Vec::default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default, PartialEq, Eq, ColladaElement)]
 #[name = "contributor"]
 pub struct Contributor {
@@ -108,18 +173,51 @@ pub struct Contributor {
     pub source_data: Option<AnyUri>,
 }
 
-impl Into<v1_5::Contributor> for Contributor {
-    fn into(self) -> v1_5::Contributor {
-        v1_5::Contributor {
-            author: self.author,
-            author_email: None,
-            author_website: None,
-            authoring_tool: self.authoring_tool,
-            comments: self.comments,
-            copyright: self.copyright,
-            source_data: self.source_data,
-        }
-    }
+/// Provides arbitrary additional information about an element.
+///
+/// COLLADA allows for applications to provide extra information about any given piece of data,
+/// including application-specific information that's not part of the COLLADA specification. This
+/// data can be any syntactically valid XML data, and is not parsed as part of this library, save
+/// for a few specific 3rd party applications that are directly supported.
+///
+/// # Choosing a Technique
+///
+/// There may be more than one [`Technique`][Technique] provided in `techniques`, but generally
+/// only one is used by the consuming application. The application should pick a technique
+/// with a supported profile. If there are multiple techniques with supported profiles the
+/// application is free to pick whichever technique is preferred.
+///
+/// [Technique]: struct.Technique.html
+#[derive(Debug, Clone, Default, PartialEq, ColladaElement)]
+#[name = "extra"]
+pub struct Extra {
+    /// The identifier of the element, if present. Will be unique within the document.
+    #[attribute]
+    pub id: Option<String>,
+
+    /// The text string name of the element, if present.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// A hint as to the type of information this element represents, if present. Must be
+    /// must be understood by the consuming application.
+    #[attribute]
+    #[name = "type"]
+    pub type_hint: Option<String>,
+
+    /// Asset-management information for this element, if present.
+    ///
+    /// While this is technically allowed in all `<extra>` elements, it is likely only present in
+    /// elements that describe a new "asset" of some kind, rather than in `<extra>` elements that
+    /// provide application-specific information about an existing one.
+    #[child]
+    pub asset: Option<Asset>,
+
+    /// The arbitrary additional information, containing unprocessed XML events. There will always
+    /// be at least one item in `techniques`.
+    #[child]
+    #[required]
+    pub techniques: Vec<Technique>,
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
