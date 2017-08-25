@@ -83,7 +83,6 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
     for field in fields {
         enum MemberType {
             Child,
-            TextChild,
             Attribute,
             Text,
         }
@@ -188,19 +187,22 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
             }
         };
 
-        // Determine the data type of the inner type, i.e. if it's `String` or another
-        // `ColladaElement`.
+        // Determine the data type of the inner type. A specific set of known types are parsed
+        // automatically from text data. Any unknown type is assumed to impl `ColladaElement`,
+        // and so parsing defers to the types `ColladaElement` impl.
         let data_type = match inner_type {
             Ty::Path(None, ref path) => {
                 let segment = path.segments.last().expect("Somehow got an empty path ?_?");
-                if segment.ident.as_ref() == "String" || segment.ident.as_ref() == "DateTime" {
+                let type_ident = segment.ident.as_ref();
+                if type_ident == "String"
+                || type_ident == "DateTime"
+                || type_ident == "AnyUri"
+                || type_ident == "f32"
+                || type_ident == "usize"
+                {
                     DataType::TextData(inner_type.clone())
                 } else {
-                    if is_text_data {
-                        DataType::TextData(inner_type.clone())
-                    } else {
-                        DataType::ColladaElement(inner_type.clone())
-                    }
+                    DataType::ColladaElement(inner_type.clone())
                 }
             },
 
@@ -420,7 +422,14 @@ fn generate_enum_impl(config: EnumMember) -> Result<quote::Tokens, String> {
 }
 
 fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
-    let StructMember { ident, element_name, attributes, children, stub_me_out } = config;
+    let StructMember {
+        ident,
+        element_name,
+        attributes,
+        children,
+        text_contents,
+        stub_me_out
+    } = config;
 
     // Generate declarations for the member variables of the struct.
     // -------------------------------------------------------------
