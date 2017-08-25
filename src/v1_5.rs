@@ -247,7 +247,6 @@ pub struct Contributor {
 
     /// The URL for the author's website, if present.
     #[child]
-    #[text_data]
     pub author_website: Option<AnyUri>,
 
     /// The name of the authoring tool.
@@ -267,7 +266,6 @@ pub struct Contributor {
     /// For example, if the asset based off a file `tank.s3d`, the value might be
     /// `c:/models/tank.s3d`.
     #[child]
-    #[text_data]
     pub source_data: Option<AnyUri>,
 }
 
@@ -330,12 +328,10 @@ pub struct Extra {
 pub struct GeographicLocation {
     /// The longitude of the location. Will be in the range -180.0 to 180.0.
     #[child]
-    #[text_data]
     pub longitude: f64,
 
     /// The latitude of the location. Will be in the range -180.0 to 180.0.
     #[child]
-    #[text_data]
     pub latitude: f64,
 
     /// Specifies the altitude, either relative to global sea level or relative to ground level.

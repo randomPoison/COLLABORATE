@@ -210,7 +210,6 @@ pub struct Contributor {
     pub copyright: Option<String>,
 
     #[child]
-    #[text_data]
     pub source_data: Option<AnyUri>,
 }
 
@@ -267,7 +266,27 @@ pub struct Extra {
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "float_array"]
-pub struct FloatArray;
+pub struct FloatArray {
+    #[attribute]
+    pub count: usize,
+
+    #[attribute]
+    pub id: Option<String>,
+
+    #[attribute]
+    pub name: Option<String>,
+
+    #[attribute]
+    #[optional_with_default(default = "6")]
+    pub digits: usize,
+
+    #[attribute]
+    #[optional_with_default(default = "38")]
+    pub magnitude: usize,
+
+    #[text]
+    pub data: Vec<f32>,
+}
 
 /// A geometric element of unknown type.
 ///
