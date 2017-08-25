@@ -277,11 +277,11 @@ pub struct FloatArray {
     pub name: Option<String>,
 
     #[attribute]
-    #[optional_with_default(default = "6")]
+    #[optional_with_default = "6"]
     pub digits: usize,
 
     #[attribute]
-    #[optional_with_default(default = "38")]
+    #[optional_with_default = "38"]
     pub magnitude: usize,
 
     #[text]

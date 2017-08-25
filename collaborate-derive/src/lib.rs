@@ -95,7 +95,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
         // --------------------------------------
         let mut member_type = None;
         let mut is_required = false;
-        let mut optional_with_default = false;
+        let mut optional_with_default = None;
 
         for attribute in field.attrs {
             match attribute.name() {
@@ -115,7 +115,21 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
                 }
 
                 "required" => { is_required = true; }
-                "optional_with_default" => { optional_with_default = true; }
+
+                "optional_with_default" => {
+                    match attribute.value {
+                        MetaItem::Word(_) => {
+                            optional_with_default = Some(DefaultValue::Default);
+                        }
+
+                        MetaItem::NameValue(_, Lit::Str(default_value, _)) => {
+                            optional_with_default = Some(DefaultValue::Value(Ident::new(default_value)));
+                        }
+
+                        _ => panic!(r#"Invalid usage of `#[optional_with_default]`, valid uses are `#[optional_with_default]` or `#[optional_with_default = "<default_value>"]`"#),
+                    }
+                }
+
                 "name" => {
                     match attribute.value {
                         MetaItem::NameValue(_, Lit::Str(value, _)) => {
@@ -162,10 +176,14 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
             // No type parameters, so we're not looking at `Option<T>` or `Vec<T>`. That means the
             // child is required (or that a default value will be used if the child isn't present)
             // and that the field's type is the type of the child data.
-            if optional_with_default {
-                (ChildOccurrences::OptionalWithDefault, field.ty)
-            } else {
-                (ChildOccurrences::Required, field.ty)
+            match optional_with_default {
+                Some(default_value) => {
+                    (ChildOccurrences::OptionalWithDefault(default_value), field.ty)
+                }
+
+                None => {
+                    (ChildOccurrences::Required, field.ty)
+                }
             }
         } else {
             // There's 1 type parameter, so determine if we're looking at an `Option<T>`, which
@@ -198,6 +216,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
                 || type_ident == "DateTime"
                 || type_ident == "AnyUri"
                 || type_ident == "f32"
+                || type_ident == "f64"
                 || type_ident == "usize"
                 {
                     DataType::TextData(inner_type.clone())
@@ -225,7 +244,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
                 // Map the `ChildOccurrences` to an `AttributeOccurrences`.
                 let occurrences = match occurrences {
                     ChildOccurrences::Optional => AttributeOccurrences::Optional,
-                    ChildOccurrences::OptionalWithDefault => AttributeOccurrences::OptionalWithDefault,
+                    ChildOccurrences::OptionalWithDefault(default_value) => AttributeOccurrences::OptionalWithDefault(default_value),
                     ChildOccurrences::Required => AttributeOccurrences::Required,
 
                     ChildOccurrences::OptionalMany | ChildOccurrences::RequiredMany => {
@@ -289,10 +308,10 @@ struct EnumMemberVariant {
     inner_type: Ty,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum AttributeOccurrences {
     Optional,
-    OptionalWithDefault,
+    OptionalWithDefault(DefaultValue),
     Required,
 }
 
@@ -315,10 +334,16 @@ struct Child {
     data_type: DataType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum DefaultValue {
+    Default,
+    Value(Ident),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum ChildOccurrences {
     Optional,
-    OptionalWithDefault,
+    OptionalWithDefault(DefaultValue),
     Required,
     OptionalMany,
     RequiredMany,
@@ -329,7 +354,7 @@ impl ToTokens for ChildOccurrences {
         match *self {
             ChildOccurrences::Optional => { tokens.append("Optional"); }
 
-            ChildOccurrences::OptionalWithDefault => { tokens.append("OptionalWithDefault"); }
+            ChildOccurrences::OptionalWithDefault(_) => { tokens.append("OptionalWithDefault"); }
 
             ChildOccurrences::Required => { tokens.append("Required"); }
 
@@ -441,9 +466,11 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
             });
         let childs = children.iter()
             .map(|child| {
-                let &Child { ref member_name, occurrences, .. } = child;
-                match occurrences {
-                    ChildOccurrences::Optional | ChildOccurrences::OptionalWithDefault | ChildOccurrences::Required => {
+                let &Child { ref member_name, ref occurrences, .. } = child;
+                match *occurrences {
+                    ChildOccurrences::Optional |
+                    ChildOccurrences::OptionalWithDefault(_) |
+                    ChildOccurrences::Required => {
                         quote! { let mut #member_name = None; }
                     }
 
@@ -481,17 +508,34 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
             .map(|attrib| { &*attrib.attrib_name });
 
         let required_attribs = attributes.iter()
-            .filter(|attrib| { attrib.occurrences == AttributeOccurrences::Required })
-            .map(|attrib| {
-                let &Attribute { ref member_name, ref attrib_name, .. } = attrib;
-                quote! {
-                    let #member_name = #member_name.ok_or(Error {
-                        position: reader.position(),
-                        kind: ErrorKind::MissingAttribute {
-                            element: #element_name,
-                            attribute: #attrib_name,
-                        },
-                    })?;
+            .filter_map(|attrib| {
+                let &Attribute { ref member_name, ref attrib_name, ref occurrences, .. } = attrib;
+                match *occurrences {
+                    AttributeOccurrences::Required => {
+                        Some(quote! {
+                            let #member_name = #member_name.ok_or(Error {
+                                position: reader.position(),
+                                kind: ErrorKind::MissingAttribute {
+                                    element: #element_name,
+                                    attribute: #attrib_name,
+                                },
+                            })?;
+                        })
+                    }
+
+                    AttributeOccurrences::OptionalWithDefault(ref default_value) => {
+                        Some(match *default_value {
+                            DefaultValue::Default => quote! {
+                                let #member_name = #member_name.unwrap_or_default();
+                            },
+
+                            DefaultValue::Value(ref default_value) => quote! {
+                                let #member_name = #member_name.unwrap_or(#default_value);
+                            },
+                        })
+                    }
+
+                    _ => None,
                 }
             });
 
@@ -526,7 +570,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
     let children_impl = {
         let decls = children.iter()
             .map(|child| {
-                let &Child { ref member_name, ref element_name, occurrences, ref data_type } = child;
+                let &Child { ref member_name, ref element_name, ref occurrences, ref data_type } = child;
 
                 let name = match *data_type {
                     DataType::TextData(_) => {
@@ -557,21 +601,21 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 };
 
                 let handle_result = match (occurrences, data_type) {
-                    (ChildOccurrences::Optional, &DataType::TextData(_)) => {
+                    (&ChildOccurrences::Optional, &DataType::TextData(_)) => {
                         quote! {
                             utils::verify_attributes(reader, #element_name, element_start.attributes)?;
                             #member_name = utils::optional_text_contents(reader, #element_name)?;
                         }
                     }
 
-                    (ChildOccurrences::OptionalWithDefault, &DataType::TextData(_)) => {
+                    (&ChildOccurrences::OptionalWithDefault(_), &DataType::TextData(_)) => {
                         quote! {
                             utils::verify_attributes(reader, #element_name, element_start.attributes)?;
                             #member_name = utils::optional_text_contents(reader, #element_name)?;
                         }
                     }
 
-                    (ChildOccurrences::Required, &DataType::TextData(_)) => {
+                    (&ChildOccurrences::Required, &DataType::TextData(_)) => {
                         quote! {
                             utils::verify_attributes(reader, #element_name, element_start.attributes)?;
                             let result = utils::required_text_contents(reader, #element_name)?;
@@ -579,7 +623,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                         }
                     }
 
-                    (ChildOccurrences::OptionalMany, &DataType::TextData(_)) => {
+                    (&ChildOccurrences::OptionalMany, &DataType::TextData(_)) => {
                         quote! {
                             utils::verify_attributes(reader, #element_name, element_start.attributes)?;
                             if let Some(result) = utils::optional_text_contents(reader, #element_name)? {
@@ -588,7 +632,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                         }
                     }
 
-                    (ChildOccurrences::RequiredMany, &DataType::TextData(_)) => {
+                    (&ChildOccurrences::RequiredMany, &DataType::TextData(_)) => {
                         quote! {
                             utils::verify_attributes(reader, #element_name, element_start.attributes)?;
                             if let Some(result) = utils::optional_text_contents(reader, #element_name)? {
@@ -597,35 +641,35 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                         }
                     }
 
-                    (ChildOccurrences::Optional, &DataType::ColladaElement(ref ident)) => {
+                    (&ChildOccurrences::Optional, &DataType::ColladaElement(ref ident)) => {
                         quote! {
                             let result = #ident::parse_element(reader, element_start)?;
                             #member_name = Some(result);
                         }
                     }
 
-                    (ChildOccurrences::OptionalWithDefault, &DataType::ColladaElement(ref ident)) => {
+                    (&ChildOccurrences::OptionalWithDefault(_), &DataType::ColladaElement(ref ident)) => {
                         quote! {
                             let result = #ident::parse_element(reader, element_start)?;
                             #member_name = Some(result);
                         }
                     }
 
-                    (ChildOccurrences::Required, &DataType::ColladaElement(ref ident)) => {
+                    (&ChildOccurrences::Required, &DataType::ColladaElement(ref ident)) => {
                         quote! {
                             let result = #ident::parse_element(reader, element_start)?;
                             #member_name = Some(result);
                         }
                     }
 
-                    (ChildOccurrences::OptionalMany, &DataType::ColladaElement(ref ident)) => {
+                    (&ChildOccurrences::OptionalMany, &DataType::ColladaElement(ref ident)) => {
                         quote! {
                             let result = #ident::parse_element(reader, element_start)?;
                             #member_name.push(result);
                         }
                     }
 
-                    (ChildOccurrences::RequiredMany, &DataType::ColladaElement(ref ident)) => {
+                    (&ChildOccurrences::RequiredMany, &DataType::ColladaElement(ref ident)) => {
                         quote! {
                             let result = #ident::parse_element(reader, element_start)?;
                             #member_name.push(result);
@@ -650,17 +694,23 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
 
         let required_childs = children.iter()
             .filter_map(|child| {
-                let &Child { ref member_name, occurrences, .. } = child;
-                match occurrences {
+                let &Child { ref member_name, ref occurrences, .. } = child;
+                match *occurrences {
                     ChildOccurrences::Required => {
                         Some(quote! {
                             let #member_name = #member_name.expect("Required child was `None`");
                         })
                     }
 
-                    ChildOccurrences::OptionalWithDefault => {
-                        Some(quote! {
-                            let #member_name = #member_name.unwrap_or_default();
+                    ChildOccurrences::OptionalWithDefault(ref default_value) => {
+                        Some(match *default_value {
+                            DefaultValue::Default => quote! {
+                                let #member_name = #member_name.unwrap_or_default();
+                            },
+
+                            DefaultValue::Value(ref default_value) => quote! {
+                                let #member_name = #member_name.unwrap_or(#default_value);
+                            },
                         })
                     }
 
