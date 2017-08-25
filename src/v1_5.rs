@@ -1,6 +1,9 @@
-use {AnyUri, DateTime, Result, Error, ErrorKind, Unit, UpAxis, utils};
+//! Type definitions matching the COLLADA `1.5.0` specification.
+
+use {Result, Error, ErrorKind};
 use common::*;
 use std::io::Read;
+use utils;
 use utils::*;
 use xml::common::Position;
 use xml::reader::EventReader;

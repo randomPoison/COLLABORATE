@@ -1,6 +1,7 @@
 extern crate collaborate;
 
 use ::collaborate::*;
+use ::collaborate::common::*;
 use ::collaborate::v1_4::*;
 
 #[test]
