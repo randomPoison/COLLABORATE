@@ -7,7 +7,7 @@ use proc_macro::TokenStream;
 use quote::{Tokens, ToTokens};
 use syn::*;
 
-#[proc_macro_derive(ColladaElement, attributes(name, attribute, child, text_data, optional_with_default, required))]
+#[proc_macro_derive(ColladaElement, attributes(name, attribute, child, text, optional_with_default, required))]
 pub fn derive(input: TokenStream) -> TokenStream {
     // Parse the string representation.
     let ast = syn::parse_derive_input(&input.to_string()).unwrap();
@@ -28,6 +28,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
     // ----------------------------------------------------------------------------------
     let mut children = Vec::new();
     let mut attributes = Vec::new();
+    let mut text_contents = None;
     let mut stub_me_out = false;
 
     let fields = match input.body {
@@ -80,23 +81,40 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
     };
 
     for field in fields {
+        enum MemberType {
+            Child,
+            TextChild,
+            Attribute,
+            Text,
+        }
+
         // We only support struct-structs, so all fields will have an ident.
         let member_name = field.ident.unwrap();
         let mut special_name = member_name.clone().to_string();
 
         // Validate the attributes for the field.
         // --------------------------------------
-        let mut is_child = false;
-        let mut is_attribute = false;
-        let mut is_text_data = false;
+        let mut member_type = None;
         let mut is_required = false;
         let mut optional_with_default = false;
 
         for attribute in field.attrs {
             match attribute.name() {
-                "child" => { is_child = true; }
-                "attribute" => { is_attribute = true; }
-                "text_data" => { is_text_data = true; }
+                "child" => {
+                    assert!(member_type.is_none(), "Member type may only be specified once");
+                    member_type = Some(MemberType::Child);
+                }
+
+                "attribute" => {
+                    assert!(member_type.is_none(), "Member type may only be specified once");
+                    member_type = Some(MemberType::Attribute);
+                }
+
+                "text" => {
+                    assert!(member_type.is_none(), "Member type may only be specified once");
+                    member_type = Some(MemberType::Text);
+                }
+
                 "required" => { is_required = true; }
                 "optional_with_default" => { optional_with_default = true; }
                 "name" => {
@@ -117,19 +135,7 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
             }
         }
 
-        // Verify that there is either a `#[child]` attribute or an `#[attribute]` attribute,
-        // but not both.
-        if !(is_child || is_attribute) {
-            return Err(format!(
-                "Missing `#[child]` or `#[attribute]` attribute on member {:?}, one is required",
-                member_name,
-            ));
-        } else if is_child && is_attribute {
-            return Err(format!(
-                "Both `#[child]` and `#[attribute]` attributes present on member {:?}, only one must be present",
-                member_name,
-            ));
-        }
+        let member_type = member_type.expect("Missing `#[child]`, `#[attribute]`, or `#[text]` attribute on member {:?}, one is required");
 
         // Determine the data type and occurrences for the member.
         let path = match field.ty.clone() {
@@ -203,39 +209,53 @@ fn process_derive_input(input: DeriveInput) -> Result<ElementConfiguration, Stri
 
         // Determine whether we're looking at a child or an attribute based on whether the member
         // has a `#[child]` or an `#[attribute]` attribute.
-        if is_child {
-            children.push(Child {
-                member_name: member_name.clone(),
-                element_name: special_name,
-                occurrences: occurrences,
-                data_type: data_type,
-            });
-        } else {
-            // Map the `ChildOccurrences` to an `AttributeOccurrences`.
-            let occurrences = match occurrences {
-                ChildOccurrences::Optional => AttributeOccurrences::Optional,
-                ChildOccurrences::OptionalWithDefault => AttributeOccurrences::OptionalWithDefault,
-                ChildOccurrences::Required => AttributeOccurrences::Required,
+        match member_type {
+            MemberType::Child => {
+                children.push(Child {
+                    member_name: member_name.clone(),
+                    element_name: special_name,
+                    occurrences: occurrences,
+                    data_type: data_type,
+                });
+            }
 
-                ChildOccurrences::OptionalMany | ChildOccurrences::RequiredMany => {
-                    return Err("Attribute may not be repeating, meaning it may not be of type `Vec<T>`".into());
-                }
-            };
+            MemberType::Attribute => {
+                // Map the `ChildOccurrences` to an `AttributeOccurrences`.
+                let occurrences = match occurrences {
+                    ChildOccurrences::Optional => AttributeOccurrences::Optional,
+                    ChildOccurrences::OptionalWithDefault => AttributeOccurrences::OptionalWithDefault,
+                    ChildOccurrences::Required => AttributeOccurrences::Required,
 
-            attributes.push(Attribute {
-                member_name: member_name.clone(),
-                attrib_name: special_name,
-                occurrences: occurrences,
-                ty: inner_type,
-            });
+                    ChildOccurrences::OptionalMany | ChildOccurrences::RequiredMany => {
+                        return Err("Attribute may not be repeating, meaning it may not be of type `Vec<T>`".into());
+                    }
+                };
+
+                attributes.push(Attribute {
+                    member_name: member_name.clone(),
+                    attrib_name: special_name,
+                    occurrences,
+                    ty: inner_type,
+                });
+            }
+
+            MemberType::Text => {
+                assert!(text_contents.is_none(), "Only one member may have the `#[text]` attribute");
+                text_contents = Some(TextContents {
+                    member_name,
+                    occurrences,
+                    member_type: inner_type,
+                });
+            }
         }
     }
 
     Ok(ElementConfiguration::StructMember(StructMember {
-        ident: ident,
-        element_name: element_name,
-        attributes: attributes,
-        children: children,
+        ident,
+        element_name,
+        attributes,
+        children,
+        text_contents,
 
         stub_me_out,
     }))
@@ -251,6 +271,7 @@ struct StructMember {
     element_name: String,
     attributes: Vec<Attribute>,
     children: Vec<Child>,
+    text_contents: Option<TextContents>,
 
     /// Temporary flag to allow us to stub out elements until the entire spec is covered.
     stub_me_out: bool,
@@ -315,6 +336,12 @@ impl ToTokens for ChildOccurrences {
             ChildOccurrences::RequiredMany => { tokens.append("RequiredMany"); }
         }
     }
+}
+
+struct TextContents {
+    member_name: Ident,
+    occurrences: ChildOccurrences,
+    member_type: Ty,
 }
 
 fn generate_impl(derive_input: DeriveInput) -> Result<quote::Tokens, String> {
