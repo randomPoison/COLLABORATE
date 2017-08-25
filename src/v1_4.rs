@@ -145,6 +145,19 @@ impl Collada {
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "accessor"]
+pub struct Accessor;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Array {
+    Idref(IdrefArray),
+    Name(NameArray),
+    Bool(BoolArray),
+    Float(FloatArray),
+    Int(IntArray),
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "asset"]
 pub struct Asset {
     #[child]
@@ -176,6 +189,10 @@ pub struct Asset {
     #[optional_with_default]
     pub up_axis: UpAxis,
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "bool_array"]
+pub struct BoolArray;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, ColladaElement)]
 #[name = "contributor"]
@@ -248,6 +265,10 @@ pub struct Extra {
     pub techniques: Vec<Technique>,
 }
 
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "float_array"]
+pub struct FloatArray;
+
 /// A geometric element of unknown type.
 ///
 /// Each variant wraps a single value containing a given type of geometric data. See the
@@ -290,6 +311,14 @@ pub struct Geometry {
     #[child]
     pub extra: Vec<Extra>,
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "IDREF_array"]
+pub struct IdrefArray;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "int_array"]
+pub struct IntArray;
 
 /// A single library of unknown type.
 ///
@@ -457,6 +486,10 @@ pub struct Mesh {
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "Name_array"]
+pub struct NameArray;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polygons"]
 pub struct Polygons;
 
@@ -481,7 +514,32 @@ pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "source"]
-pub struct Source;
+pub struct Source {
+    #[attribute]
+    pub id: String,
+
+    #[attribute]
+    pub name: Option<String>,
+
+    #[child]
+    pub asset: Option<Asset>,
+
+    #[child]
+    pub array: Option<Array>,
+
+    #[child]
+    pub technique_common: Option<SourceTechniqueCommon>,
+
+    #[child]
+    pub techniques: Vec<Technique>,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "technique_common"]
+pub struct SourceTechniqueCommon {
+    #[child]
+    pub accessor: Accessor,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "spline"]
