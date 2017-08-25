@@ -14,11 +14,11 @@ use xml::reader::EventReader;
 pub struct Collada {
     /// The version string for the COLLADA specification used by the document.
     ///
-    /// Only "1.4.0", "1.4.1", and "1.5.0" are supported currently.
+    /// Will be "1.5.0".
     #[attribute]
     pub version: String,
 
-    // Included for completeness in parsing, not actually used.
+    /// Included for completeness in parsing, not actually used.
     #[attribute]
     pub xmlns: Option<String>,
 
@@ -33,12 +33,23 @@ pub struct Collada {
     #[child]
     pub asset: Asset,
 
+    /// The collection of libraries that bulk of the actual data contained in the document.
+    ///
+    /// Libraries can occur in any order, and there can be 0 or more libraries of any given type.
+    /// Helper methods are provided to iterate over all instances of a given library type, as well
+    /// as to extract data from all instance of a library type.
+    // TODO: Actually provide the helper methods.
     #[child]
     pub libraries: Vec<Library>,
 
+    /// Defines the scene hierarchy associated with this document.
     #[child]
     pub scene: Option<Scene>,
 
+    /// Arbitrary additional information about the document as a whole.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
     #[child]
     pub extras: Vec<Extra>,
 }
