@@ -197,6 +197,10 @@ pub struct Contributor {
     pub source_data: Option<AnyUri>,
 }
 
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "convex_mesh"]
+pub struct ConvexMesh;
+
 /// Provides arbitrary additional information about an element.
 ///
 /// COLLADA allows for applications to provide extra information about any given piece of data,
@@ -242,6 +246,49 @@ pub struct Extra {
     #[child]
     #[required]
     pub techniques: Vec<Technique>,
+}
+
+/// A geometric element of unknown type.
+///
+/// Each variant wraps a single value containing a given type of geometric data. See the
+/// documentation for each of the possible geometric types for more information.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum GeometricElement {
+    ConvexMesh(ConvexMesh),
+    Mesh(Mesh),
+    Spline(Spline),
+}
+
+/// Describes the visual shape and appearance of an object in a scene.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "geometry"]
+pub struct Geometry {
+    /// A unique identifier for the geometry instance.
+    ///
+    /// Will be unique within the document.
+    #[attribute]
+    pub id: Option<String>,
+
+    /// The human-friendly name for this geometry instance.
+    ///
+    /// Has no semantic meaning.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// Metadata about this geometry instance and the data it contains.
+    #[child]
+    pub asset: Option<Asset>,
+
+    /// The actual data for the geometry instance.
+    #[child]
+    pub geometric_element: GeometricElement,
+
+    /// Arbitrary additional information about this geometry instance and the data it contains.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
+    #[child]
+    pub extra: Vec<Extra>,
 }
 
 /// A single library of unknown type.
@@ -363,61 +410,95 @@ pub struct LibraryPhysicsScenes;
 #[name = "library_visual_scenes"]
 pub struct LibraryVisualScenes;
 
-/// A geometric element of unknown type.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "lines"]
+pub struct Lines;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "linestrips"]
+pub struct Linestrips;
+
+/// Describes basic geometric meshes using vertex and primitive information.
 ///
-/// Each variant wraps a single value containing a given type of geometric data. See the
-/// documentation for each of the possible geometric types for more information.
+/// Meshes embody a general form of geometric description that primarily includes vertex and
+/// primitive information. Vertex information is the set of attributes associated with a poin on
+/// the surface of the mesh. Each vertex includes data for attributes such as:
+///
+/// * Vertex position
+/// * Vertex color
+/// * Vertex normal
+/// * Vertex texture coordinate
+///
+/// The mesh also includes a description of how the vertices are organized to form the geometric
+/// shape of the mesh. The mesh vertices are collated into geometric primitives such as polygons,
+/// triangles, or lines.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-pub enum GeometricElement {
-    ConvexMesh(ConvexMesh),
-    Mesh(Mesh),
-    Spline(Spline),
-}
-
-/// Describes the visual shape and appearance of an object in a scene.
-#[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "geometry"]
-pub struct Geometry {
-    /// A unique identifier for the geometry instance.
+#[name = "mesh"]
+pub struct Mesh {
+    /// One or more [`Source`] instances containing the raw mesh data.
     ///
-    /// Will be unique within the document.
-    #[attribute]
-    pub id: Option<String>,
-
-    /// The human-friendly name for this geometry instance.
-    ///
-    /// Has no semantic meaning.
-    #[attribute]
-    pub name: Option<String>,
-
-    /// Metadata about this geometry instance and the data it contains.
+    /// [`Source`]: ./struct.Source.html
     #[child]
-    pub asset: Option<Asset>,
+    #[required]
+    pub sources: Vec<Source>,
 
-    /// The actual data for the geometry instance.
     #[child]
-    pub geometric_element: GeometricElement,
+    pub vertices: Vertices,
+
+    #[child]
+    pub primitives: Vec<Primitive>,
 
     /// Arbitrary additional information about this geometry instance and the data it contains.
     ///
     /// For more information about 3rd-party extensions, see the
     /// [crate-level documentation](../index.html#3rd-party-extensions).
     #[child]
-    pub extra: Vec<Extra>,
+    pub extras: Vec<Extra>,
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "convex_mesh"]
-pub struct ConvexMesh;
+#[name = "polygons"]
+pub struct Polygons;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "mesh"]
-pub struct Mesh;
+#[name = "polylist"]
+pub struct Polylist;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Primitive {
+    Lines(Lines),
+    Linestrips(Linestrips),
+    Polygons(Polygons),
+    Polylist(Polylist),
+    Triangles(Triangles),
+    Trifans(Trifans),
+    Tristrips(Tristrips),
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "scene"]
 pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "source"]
+pub struct Source;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "spline"]
 pub struct Spline;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "triangles"]
+pub struct Triangles;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "trifans"]
+pub struct Trifans;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "tristrips"]
+pub struct Tristrips;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "vertices"]
+pub struct Vertices;
