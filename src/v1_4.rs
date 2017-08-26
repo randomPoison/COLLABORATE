@@ -627,7 +627,19 @@ pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "input"]
-pub struct SharedInput;
+pub struct SharedInput {
+    #[attribute]
+    pub offset: usize,
+
+    #[attribute]
+    pub semantic: String,
+
+    #[attribute]
+    pub source: UriFragment,
+
+    #[attribute]
+    pub set: Option<usize>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "source"]
