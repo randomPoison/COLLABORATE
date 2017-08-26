@@ -146,7 +146,24 @@ impl Collada {
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "accessor"]
-pub struct Accessor;
+pub struct Accessor {
+    #[attribute]
+    pub count: usize,
+
+    #[attribute]
+    #[optional_with_default = "0"]
+    pub offset: usize,
+
+    #[attribute]
+    pub source: AnyUri,
+
+    #[attribute]
+    #[optional_with_default = "1"]
+    pub stride: usize,
+
+    #[child]
+    pub params: Vec<Param>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 pub enum Array {
@@ -534,6 +551,24 @@ pub struct Mesh {
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "Name_array"]
 pub struct NameArray;
+
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "param"]
+pub struct Param {
+    #[attribute]
+    pub name: Option<String>,
+
+    #[attribute]
+    pub sid: Option<String>,
+
+    #[attribute]
+    #[name = "type"]
+    pub data_type: Option<String>,
+
+    #[attribute]
+    pub semantic: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polygons"]
