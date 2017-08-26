@@ -698,7 +698,7 @@ pub struct Vertices {
     pub id: String,
 
     #[attribute]
-    pub name: String,
+    pub name: Option<String>,
 
     #[child]
     #[required]
