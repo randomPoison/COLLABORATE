@@ -464,6 +464,7 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 let ident = &attrib.member_name;
                 quote! { let mut #ident = None; }
             });
+
         let childs = children.iter()
             .map(|child| {
                 let &Child { ref member_name, ref occurrences, .. } = child;
@@ -480,9 +481,27 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 }
             });
 
+        let text = text_contents.as_ref()
+            .map(|text_contents| {
+                let TextContents { ref member_name, ref occurrences, .. } = *text_contents;
+                match *occurrences {
+                    ChildOccurrences::Optional |
+                    ChildOccurrences::OptionalWithDefault(_) |
+                    ChildOccurrences::Required => {
+                        quote! { let mut #member_name = None; }
+                    }
+
+                    ChildOccurrences::OptionalMany | ChildOccurrences::RequiredMany => {
+                        quote! { let mut #member_name = Vec::new(); }
+                    }
+                }
+            })
+            .unwrap_or(Tokens::new());
+
         quote! {
             #( #attribs )*
             #( #childs )*
+            #text
         }
     };
 
@@ -692,6 +711,46 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 }
             });
 
+        let text_contents_impl = text_contents.as_ref()
+            .map(|text_contents| {
+                let TextContents {
+                    ref member_name,
+                    ref occurrences,
+                    ref member_type,
+                } = *text_contents;
+
+                match *occurrences {
+                    ChildOccurrences::Optional |
+                    ChildOccurrences::OptionalWithDefault(_) |
+                    ChildOccurrences::Required => {
+                        quote! {
+                            Some(&mut |_, text| {
+                                #member_name = Some(text.parse()?);
+                                Ok(())
+                            })
+                        }
+                    }
+
+                    ChildOccurrences::OptionalMany | ChildOccurrences::RequiredMany => {
+                        quote! {
+                            Some(&mut |reader, text| {
+                                #member_name = text.split_whitespace()
+                                    .map(|word| word.parse::<#member_type>())
+                                    .collect::<::std::result::Result<Vec<_>, _>>()
+                                    .map_err(|err| {
+                                        Error {
+                                            position: reader.position(),
+                                            kind: err.into(),
+                                        }
+                                    })?;
+                                Ok(())
+                            })
+                        }
+                    }
+                }
+            })
+            .unwrap_or(quote! { None });
+
         let required_childs = children.iter()
             .filter_map(|child| {
                 let &Child { ref member_name, ref occurrences, .. } = child;
@@ -718,15 +777,33 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
                 }
             });
 
+        let unwrap_text_contents = text_contents.as_ref()
+            .map(|text_contents| {
+                let TextContents { ref member_name, ref occurrences, .. } = *text_contents;
+                match *occurrences {
+                    ChildOccurrences::Required => {
+                        quote! {
+                            let #member_name = #member_name.expect("Required child was `None`");
+                        }
+                    }
+
+                    _ => { Tokens::new() }
+                }
+            })
+            .unwrap_or(Tokens::new());
+
         quote! {
             ElementConfiguration {
                 name: #element_name,
                 children: &mut [
                     #( #decls ),*
                 ],
+                text_contents: #text_contents_impl,
             }.parse_children(reader)?;
 
             #( #required_childs )*
+
+            #unwrap_text_contents
         }
     };
 
@@ -736,18 +813,25 @@ fn generate_struct_impl(config: StructMember) -> Result<quote::Tokens, String> {
         let attribs = attributes.iter()
             .map(|attrib| {
                 let ident = &attrib.member_name;
-                quote! { #ident: #ident }
+                quote! { #ident }
             });
         let childs = children.iter()
             .map(|child| {
                 let ident = &child.member_name;
-                quote! { #ident: #ident }
+                quote! { #ident }
             });
+        let text = text_contents.as_ref()
+            .map(|text_contents| {
+                let ident = &text_contents.member_name;
+                quote! { #ident }
+            })
+            .unwrap_or(Tokens::new());
 
         quote! {
             Ok(#ident {
                 #( #attribs, )*
                 #( #childs, )*
+                #text
             })
         }
     };

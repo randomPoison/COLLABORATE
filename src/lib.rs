@@ -489,6 +489,10 @@ impl Display for ErrorKind {
                 write!(formatter, "{}", error)
             }
 
+            ErrorKind::ParseIntError(ref error) => {
+                write!(formatter, "{}", error)
+            }
+
             ErrorKind::TimeError(ref error) => {
                 write!(formatter, "{}", error)
             }
