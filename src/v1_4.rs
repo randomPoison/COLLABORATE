@@ -157,6 +157,15 @@ pub enum Array {
     Int(IntArray),
 }
 
+impl Array {
+    pub fn as_float_array(&self) -> Option<&FloatArray> {
+        match *self {
+            Array::Float(ref float_array) => Some(float_array),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "asset"]
 pub struct Asset {
@@ -299,6 +308,15 @@ pub enum GeometricElement {
     Spline(Spline),
 }
 
+impl GeometricElement {
+    pub fn as_mesh(&self) -> Option<&Mesh> {
+        match *self {
+            GeometricElement::Mesh(ref mesh) => Some(mesh),
+            _ => None,
+        }
+    }
+}
+
 /// Describes the visual shape and appearance of an object in a scene.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "geometry"]
@@ -360,6 +378,15 @@ pub enum Library {
     PhysicsModels(LibraryPhysicsModels),
     PhysicsScenes(LibraryPhysicsScenes),
     VisualScenes(LibraryVisualScenes),
+}
+
+impl Library {
+    pub fn as_library_geometries(&self) -> Option<&LibraryGeometries> {
+        match *self {
+            Library::Geometries(ref library_geometries) => Some(library_geometries),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
