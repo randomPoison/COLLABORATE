@@ -97,7 +97,7 @@ pub use xml::reader::{Error as XmlError, XmlEvent};
 
 use std::fmt::{self, Display, Formatter};
 use std::io::Read;
-use std::num::ParseFloatError;
+use std::num::{ParseFloatError, ParseIntError};
 use utils::{ColladaElement, StringListDisplay};
 use xml::common::Position;
 use xml::reader::EventReader;
@@ -336,6 +336,11 @@ pub enum ErrorKind {
     /// [f64::from_str]: https://doc.rust-lang.org/std/primitive.f64.html#method.from_str
     ParseFloatError(ParseFloatError),
 
+    /// A integer value was formatted incorrectly.
+    ///
+    /// Floating point values are parsed according to Rust's [standard handling for integers](https://doc.rust-lang.org/std/primitive.usize.html#method.from_str).
+    ParseIntError(ParseIntError),
+
     /// A datetime string was formatted incorrectly.
     ///
     /// Datetime strings in COLLADA are in the [ISO 8601][ISO 8601] format, and improperly
@@ -445,6 +450,12 @@ impl From<::std::num::ParseFloatError> for ErrorKind {
     }
 }
 
+impl From<::std::num::ParseIntError> for ErrorKind {
+    fn from(from: ::std::num::ParseIntError) -> ErrorKind {
+        ErrorKind::ParseIntError(from)
+    }
+}
+
 impl From<::std::string::ParseError> for ErrorKind {
     fn from(from: ::std::string::ParseError) -> ErrorKind {
         match from {}
@@ -475,6 +486,10 @@ impl Display for ErrorKind {
             }
 
             ErrorKind::ParseFloatError(ref error) => {
+                write!(formatter, "{}", error)
+            }
+
+            ErrorKind::ParseIntError(ref error) => {
                 write!(formatter, "{}", error)
             }
 

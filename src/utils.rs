@@ -60,6 +60,7 @@ pub enum ChildOccurrences {
 pub struct ElementConfiguration<'a, R: 'a + Read> {
     pub name: &'static str,
     pub children: &'a mut [ChildConfiguration<'a, R>],
+    pub text_contents: Option<&'a mut FnMut(&mut EventReader<R>, String) -> Result<()>>,
 }
 
 impl<'a, R: 'a + Read> ElementConfiguration<'a, R> {
@@ -67,6 +68,12 @@ impl<'a, R: 'a + Read> ElementConfiguration<'a, R> {
         // Keep track of the text position for the root element so that it can be used for error
         // messages.
         let root_position = reader.position();
+
+        if let Some(handle_text) = self.text_contents {
+            let contents = required_text_contents(reader, self.name)?;
+            handle_text(reader, contents)?;
+            return Ok(());
+        }
 
         // The index of the next child we are expecting.
         let mut current_child = 0;

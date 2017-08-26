@@ -1,4 +1,8 @@
 //! Type definitions matching the COLLADA `1.4.1` specification.
+//!
+//! Note that the COLLADA `1.4.0` specification is subsumed by the `1.4.1` spec, so `1.4.0`
+//! documents are still accurately represented by the types in this module. Users of COLLABORATE
+//! don't need to distinguish between `1.4.0` and `1.4.1` documents.
 
 use {Error, ErrorKind, Result};
 use common::*;
@@ -8,28 +12,49 @@ use utils::*;
 use xml::common::Position;
 use xml::reader::EventReader;
 
+/// Represents a complete COLLADA document.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "COLLADA"]
 pub struct Collada {
+    /// The version string for the COLLADA specification used by the document.
+    ///
+    /// Will be "1.4.0" or "1.4.1".
     #[attribute]
     pub version: String,
 
+    /// Included for completeness in parsing, not actually used.
+    // TODO: Can we remove `xmlns`? Should we remove it?
     #[attribute]
     pub xmlns: Option<String>,
 
+    /// The base uri for any relative URIs in the document.
+    ///
+    /// Refer to the [XML Base Specification](https://www.w3.org/TR/xmlbase/).
     #[attribute]
     #[name = "base"]
     pub base_uri: Option<AnyUri>,
 
+    /// Global metadata about the COLLADA document.
     #[child]
     pub asset: Asset,
 
+    /// The collection of libraries that bulk of the actual data contained in the document.
+    ///
+    /// Libraries can occur in any order, and there can be 0 or more libraries of any given type.
+    /// Helper methods are provided to iterate over all instances of a given library type, as well
+    /// as to extract data from all instance of a library type.
+    // TODO: Actually provide the helper methods.
     #[child]
-    pub libraries: Vec<LibraryElement>,
+    pub libraries: Vec<Library>,
 
+    /// Defines the scene hierarchy associated with this document.
     #[child]
     pub scene: Option<Scene>,
 
+    /// Arbitrary additional information about the document as a whole.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
     #[child]
     pub extras: Vec<Extra>,
 }
@@ -60,9 +85,7 @@ impl Collada {
     ///
     /// Returns `Err` if the document is invalid or malformed in some way. For details about
     /// COLLADA versions, 3rd party extensions, and any other details that could influence how
-    /// a document is parsed see the [crate-level documentation][crate].
-    ///
-    /// [crate]: index.html
+    /// a document is parsed see the [crate-level documentation](../index.html)
     pub fn from_str(source: &str) -> Result<Collada> {
         let reader = EventReader::new_with_config(source.as_bytes(), utils::PARSER_CONFIG.clone());
         Self::parse(reader)
@@ -85,15 +108,16 @@ impl Collada {
     ///
     /// Returns `Err` if the document is invalid or malformed in some way. For details about
     /// COLLADA versions, 3rd party extensions, and any other details that could influence how
-    /// a document is parsed see the [crate-level documentation][crate].
-    ///
-    /// [crate]: index.html
+    /// a document is parsed see the [crate-level documentation](../index.html).
     pub fn read<R: Read>(reader: R) -> Result<Collada> {
         let reader = EventReader::new_with_config(reader, utils::PARSER_CONFIG.clone());
         Self::parse(reader)
     }
 
-    pub fn parse<R: Read>(mut reader: EventReader<R>) -> Result<Collada> {
+    /// Helper method that handles the bulk of the parsing work.
+    ///
+    /// `from_str` and `read` just create the `EventReader<R>` instance and then defer to `parse`.
+    fn parse<R: Read>(mut reader: EventReader<R>) -> Result<Collada> {
         // Get the opening `<COLLADA>` tag and find the "version" attribute.
         let element_start = utils::get_document_start(&mut reader)?;
         let version = element_start.attributes.iter()
@@ -117,6 +141,28 @@ impl Collada {
         }
 
         Collada::parse_element(&mut reader, element_start)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "accessor"]
+pub struct Accessor;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Array {
+    Idref(IdrefArray),
+    Name(NameArray),
+    Bool(BoolArray),
+    Float(FloatArray),
+    Int(IntArray),
+}
+
+impl Array {
+    pub fn as_float_array(&self) -> Option<&FloatArray> {
+        match *self {
+            Array::Float(ref float_array) => Some(float_array),
+            _ => None,
+        }
     }
 }
 
@@ -153,6 +199,10 @@ pub struct Asset {
     pub up_axis: UpAxis,
 }
 
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "bool_array"]
+pub struct BoolArray;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, ColladaElement)]
 #[name = "contributor"]
 pub struct Contributor {
@@ -169,9 +219,12 @@ pub struct Contributor {
     pub copyright: Option<String>,
 
     #[child]
-    #[text_data]
     pub source_data: Option<AnyUri>,
 }
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "convex_mesh"]
+pub struct ConvexMesh;
 
 /// Provides arbitrary additional information about an element.
 ///
@@ -221,7 +274,95 @@ pub struct Extra {
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-pub enum LibraryElement {
+#[name = "float_array"]
+pub struct FloatArray {
+    #[attribute]
+    pub count: usize,
+
+    #[attribute]
+    pub id: Option<String>,
+
+    #[attribute]
+    pub name: Option<String>,
+
+    #[attribute]
+    #[optional_with_default = "6"]
+    pub digits: usize,
+
+    #[attribute]
+    #[optional_with_default = "38"]
+    pub magnitude: usize,
+
+    #[text]
+    pub data: Vec<f32>,
+}
+
+/// A geometric element of unknown type.
+///
+/// Each variant wraps a single value containing a given type of geometric data. See the
+/// documentation for each of the possible geometric types for more information.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum GeometricElement {
+    ConvexMesh(ConvexMesh),
+    Mesh(Mesh),
+    Spline(Spline),
+}
+
+impl GeometricElement {
+    pub fn as_mesh(&self) -> Option<&Mesh> {
+        match *self {
+            GeometricElement::Mesh(ref mesh) => Some(mesh),
+            _ => None,
+        }
+    }
+}
+
+/// Describes the visual shape and appearance of an object in a scene.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "geometry"]
+pub struct Geometry {
+    /// A unique identifier for the geometry instance.
+    ///
+    /// Will be unique within the document.
+    #[attribute]
+    pub id: Option<String>,
+
+    /// The human-friendly name for this geometry instance.
+    ///
+    /// Has no semantic meaning.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// Metadata about this geometry instance and the data it contains.
+    #[child]
+    pub asset: Option<Asset>,
+
+    /// The actual data for the geometry instance.
+    #[child]
+    pub geometric_element: GeometricElement,
+
+    /// Arbitrary additional information about this geometry instance and the data it contains.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
+    #[child]
+    pub extra: Vec<Extra>,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "IDREF_array"]
+pub struct IdrefArray;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "int_array"]
+pub struct IntArray;
+
+/// A single library of unknown type.
+///
+/// Each variant wraps a single value containing the library data. See the documentation for
+/// each of the possible library types for more information on what data each can contain.
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Library {
     Animations(LibraryAnimations),
     AnimationClips(LibraryAnimationClips),
     Cameras(LibraryCameras),
@@ -237,6 +378,15 @@ pub enum LibraryElement {
     PhysicsModels(LibraryPhysicsModels),
     PhysicsScenes(LibraryPhysicsScenes),
     VisualScenes(LibraryVisualScenes),
+}
+
+impl Library {
+    pub fn as_library_geometries(&self) -> Option<&LibraryGeometries> {
+        match *self {
+            Library::Geometries(ref library_geometries) => Some(library_geometries),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
@@ -263,24 +413,44 @@ pub struct LibraryEffects;
 #[name = "library_force_fields"]
 pub struct LibraryForceFields;
 
+/// Contains geometric data for the document.
+///
+/// The geometric data is contained in `geometries` by one or more [`Geometry`] instances,
+/// `LibraryGeometries` is only a container and does not represent any geometric data itself.
+///
+/// [`Geometry`]: ./struct.Geometry.html
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "library_geometries"]
 pub struct LibraryGeometries {
+    /// A unique identifier for the library.
+    ///
+    /// Will be unique within the document.
     #[attribute]
     pub id: Option<String>,
 
+    /// The human-friendly name for this library.
+    ///
+    /// Has no semantic meaning.
     #[attribute]
     pub name: Option<String>,
 
+    /// Metada about the library and the data contained within it.
     #[child]
     pub asset: Option<Asset>,
 
+    /// The geometric data contained within this library instance.
+    ///
+    /// There will always be at least one geometric element in a `LibraryGeometries`.
     #[child]
     #[required]
-    pub geometry: Vec<Geometry>,
+    pub geometries: Vec<Geometry>,
 
+    /// Arbitrary additional information about this library and the data it contains.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
     #[child]
-    pub extra: Vec<Extra>,
+    pub extras: Vec<Extra>,
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
@@ -316,43 +486,123 @@ pub struct LibraryPhysicsScenes;
 pub struct LibraryVisualScenes;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "geometry"]
-pub struct Geometry {
-    #[attribute]
-    pub id: String,
-
-    #[attribute]
-    pub name: String,
-
-    #[child]
-    pub asset: Option<Asset>,
-
-    #[child]
-    pub geometric_element: GeometricElement,
-
-    #[child]
-    pub extra: Vec<Extra>,
-}
+#[name = "lines"]
+pub struct Lines;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
-pub enum GeometricElement {
-    ConvexMesh(ConvexMesh),
-    Mesh(Mesh),
-    Spline(Spline),
-}
+#[name = "linestrips"]
+pub struct Linestrips;
 
-#[derive(Debug, Clone, PartialEq, ColladaElement)]
-#[name = "convex_mesh"]
-pub struct ConvexMesh;
-
+/// Describes basic geometric meshes using vertex and primitive information.
+///
+/// Meshes embody a general form of geometric description that primarily includes vertex and
+/// primitive information. Vertex information is the set of attributes associated with a poin on
+/// the surface of the mesh. Each vertex includes data for attributes such as:
+///
+/// * Vertex position
+/// * Vertex color
+/// * Vertex normal
+/// * Vertex texture coordinate
+///
+/// The mesh also includes a description of how the vertices are organized to form the geometric
+/// shape of the mesh. The mesh vertices are collated into geometric primitives such as polygons,
+/// triangles, or lines.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "mesh"]
-pub struct Mesh;
+pub struct Mesh {
+    /// One or more [`Source`] instances containing the raw mesh data.
+    ///
+    /// [`Source`]: ./struct.Source.html
+    #[child]
+    #[required]
+    pub sources: Vec<Source>,
+
+    #[child]
+    pub vertices: Vertices,
+
+    #[child]
+    pub primitives: Vec<Primitive>,
+
+    /// Arbitrary additional information about this geometry instance and the data it contains.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
+    #[child]
+    pub extras: Vec<Extra>,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "Name_array"]
+pub struct NameArray;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "polygons"]
+pub struct Polygons;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "polylist"]
+pub struct Polylist;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+pub enum Primitive {
+    Lines(Lines),
+    Linestrips(Linestrips),
+    Polygons(Polygons),
+    Polylist(Polylist),
+    Triangles(Triangles),
+    Trifans(Trifans),
+    Tristrips(Tristrips),
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "scene"]
 pub struct Scene;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "source"]
+pub struct Source {
+    #[attribute]
+    pub id: String,
+
+    #[attribute]
+    pub name: Option<String>,
+
+    #[child]
+    pub asset: Option<Asset>,
+
+    #[child]
+    pub array: Option<Array>,
+
+    #[child]
+    pub technique_common: Option<SourceTechniqueCommon>,
+
+    #[child]
+    pub techniques: Vec<Technique>,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "technique_common"]
+pub struct SourceTechniqueCommon {
+    #[child]
+    pub accessor: Accessor,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "spline"]
 pub struct Spline;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "triangles"]
+pub struct Triangles;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "trifans"]
+pub struct Trifans;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "tristrips"]
+pub struct Tristrips;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "vertices"]
+pub struct Vertices;

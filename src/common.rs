@@ -183,7 +183,6 @@ pub struct Unit {
     /// The name of the distance unit. For example, “meter”, “centimeter”, “inch”, or “parsec”.
     /// This can be the name of a real measurement, or an imaginary name. Defaults to `1.0`.
     #[attribute]
-    #[text_data]
     pub meter: f64,
 
     /// How many real-world meters in one distance unit as a floating-point number. For example,
