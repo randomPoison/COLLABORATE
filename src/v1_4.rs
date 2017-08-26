@@ -639,5 +639,28 @@ pub struct Trifans;
 pub struct Tristrips;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "input"]
+pub struct UnsharedInput {
+    #[attribute]
+    pub semantic: String,
+
+    #[attribute]
+    pub source: UriFragment,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "vertices"]
-pub struct Vertices;
+pub struct Vertices {
+    #[attribute]
+    pub id: String,
+
+    #[attribute]
+    pub name: String,
+
+    #[child]
+    #[required]
+    pub inputs: Vec<UnsharedInput>,
+
+    #[child]
+    pub extras: Vec<Extra>,
+}
