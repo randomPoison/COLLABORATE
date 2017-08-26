@@ -69,4 +69,22 @@ fn default_attrib_value() {
     // `<float_array>` element, so we check to see if they end up with the right default values.
     assert_eq!(6, array.digits, "Default value for `FloatArray::digits` should be 6");
     assert_eq!(38, array.magnitude, "Default value for `FloatArray::magnitude` should be 38");
+
+}
+
+#[test]
+fn float_array_text_contents() {
+    use ::collaborate::v1_4::*;
+
+    static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+    static EXPECTED: &'static [f32] = &[1.0, 1.0, -1.0, 1.0, -1.0, -1.0, -1.0, -0.9999998, -1.0, -0.9999997, 1.0, -1.0, 1.0, 0.9999995, 1.0, 0.9999994, -1.000001, 1.0, -1.0, -0.9999997, 1.0, -1.0, 1.0, 1.0];
+
+    let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    let document = Collada::from_str(&*source).unwrap();
+    let library = document.libraries[5].as_library_geometries().unwrap();
+    let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+    let source = &mesh.sources[0];
+    let array = source.array.as_ref().and_then(Array::as_float_array).unwrap();
+
+    assert_eq!(EXPECTED, &*array.data, "`<float_array>` contents were not parsed correctly");
 }
