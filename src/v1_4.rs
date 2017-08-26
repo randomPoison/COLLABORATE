@@ -574,9 +574,34 @@ pub struct Param {
 #[name = "polygons"]
 pub struct Polygons;
 
+/// A list of polygons that are not necessarily triangles.
+///
+/// Provides the information needed for a mesh to bind vertex attributes
+/// together and then organize those vertices into individual polygons.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polylist"]
-pub struct Polylist;
+pub struct Polylist {
+    #[attribute]
+    pub name: Option<String>,
+
+    #[attribute]
+    pub count: usize,
+
+    #[attribute]
+    pub material: Option<String>,
+
+    #[child]
+    pub inputs: Vec<SharedInput>,
+
+    #[child]
+    pub vcount: Option<VCount>,
+
+    #[child]
+    pub primitives: Option<Primitives>,
+
+    #[child]
+    pub extras: Vec<Extra>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 pub enum Primitive {
@@ -590,8 +615,19 @@ pub enum Primitive {
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "p"]
+pub struct Primitives {
+    #[text]
+    data: Vec<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "scene"]
 pub struct Scene;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "input"]
+pub struct SharedInput;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "source"]
@@ -646,6 +682,13 @@ pub struct UnsharedInput {
 
     #[attribute]
     pub source: UriFragment,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "vcount"]
+pub struct VCount {
+    #[text]
+    data: Vec<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
