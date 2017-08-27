@@ -572,12 +572,18 @@ pub struct Param {
 
 #[derive(Debug, Clone)]
 pub struct Polygon<'a> {
+    len: usize,
     chunks: ::std::slice::Chunks<'a, usize>,
 }
 
 impl<'a> Polygon<'a> {
     pub fn vertices(&self) -> ::std::slice::Chunks<'a, usize> {
         self.chunks.clone()
+    }
+
+    /// Returns the number of vertices in this polygon.
+    pub fn len(&self) -> usize {
+        self.len
     }
 }
 
@@ -656,6 +662,11 @@ impl Polylist {
             verts_so_far: 0,
         }
     }
+
+    /// Returns the number of polygons in the polylist.
+    pub fn len(&self) -> usize {
+        self.count
+    }
 }
 
 pub struct PolylistIter<'a> {
@@ -679,6 +690,7 @@ impl<'a> ::std::iter::Iterator for PolylistIter<'a> {
                 let indices = &primitives[self.verts_so_far * self.num_indices_per_vertex .. (self.verts_so_far + num_verts) * self.num_indices_per_vertex];
                 self.verts_so_far += num_verts;
                 Polygon {
+                    len: num_verts,
                     chunks: indices.chunks(self.num_indices_per_vertex),
                 }
             })

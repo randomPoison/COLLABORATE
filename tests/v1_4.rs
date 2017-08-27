@@ -405,3 +405,152 @@ fn contributor_illegal_child_attribute() {
     let actual = Collada::from_str(DOCUMENT).unwrap_err();
     assert_eq!(expected, actual);
 }
+
+#[test]
+fn polylist_iter() {
+    use ::collaborate::v1_4::*;
+
+    static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+
+    let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    let document = Collada::from_str(&*source).unwrap();
+    let library = document.libraries[5].as_library_geometries().unwrap();
+    let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+    let polylist = mesh.primitives[0].as_polylist().unwrap();
+
+    let mut polygons = polylist.iter();
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([0, 0].as_ref()), vertices.next());
+        assert_eq!(Some([2, 0].as_ref()), vertices.next());
+        assert_eq!(Some([3, 0].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([7, 1].as_ref()), vertices.next());
+        assert_eq!(Some([5, 1].as_ref()), vertices.next());
+        assert_eq!(Some([4, 1].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([4, 2].as_ref()), vertices.next());
+        assert_eq!(Some([1, 2].as_ref()), vertices.next());
+        assert_eq!(Some([0, 2].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([5, 3].as_ref()), vertices.next());
+        assert_eq!(Some([2, 3].as_ref()), vertices.next());
+        assert_eq!(Some([1, 3].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([2, 4].as_ref()), vertices.next());
+        assert_eq!(Some([7, 4].as_ref()), vertices.next());
+        assert_eq!(Some([3, 4].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([0, 5].as_ref()), vertices.next());
+        assert_eq!(Some([7, 5].as_ref()), vertices.next());
+        assert_eq!(Some([4, 5].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([0, 6].as_ref()), vertices.next());
+        assert_eq!(Some([1, 6].as_ref()), vertices.next());
+        assert_eq!(Some([2, 6].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([7, 7].as_ref()), vertices.next());
+        assert_eq!(Some([6, 7].as_ref()), vertices.next());
+        assert_eq!(Some([5, 7].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([4, 8].as_ref()), vertices.next());
+        assert_eq!(Some([5, 8].as_ref()), vertices.next());
+        assert_eq!(Some([1, 8].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([5, 9].as_ref()), vertices.next());
+        assert_eq!(Some([6, 9].as_ref()), vertices.next());
+        assert_eq!(Some([2, 9].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([2, 10].as_ref()), vertices.next());
+        assert_eq!(Some([6, 10].as_ref()), vertices.next());
+        assert_eq!(Some([7, 10].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    {
+        let polygon = polygons.next().unwrap();
+        assert_eq!(3, polygon.len());
+
+        let mut vertices = polygon.vertices();
+        assert_eq!(Some([0, 11].as_ref()), vertices.next());
+        assert_eq!(Some([3, 11].as_ref()), vertices.next());
+        assert_eq!(Some([7, 11].as_ref()), vertices.next());
+        assert_eq!(None, vertices.next());
+    }
+
+    assert!(polygons.next().is_none());
+}
