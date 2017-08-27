@@ -146,7 +146,24 @@ impl Collada {
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "accessor"]
-pub struct Accessor;
+pub struct Accessor {
+    #[attribute]
+    pub count: usize,
+
+    #[attribute]
+    #[optional_with_default = "0"]
+    pub offset: usize,
+
+    #[attribute]
+    pub source: AnyUri,
+
+    #[attribute]
+    #[optional_with_default = "1"]
+    pub stride: usize,
+
+    #[child]
+    pub params: Vec<Param>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 pub enum Array {
@@ -535,13 +552,150 @@ pub struct Mesh {
 #[name = "Name_array"]
 pub struct NameArray;
 
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "param"]
+pub struct Param {
+    #[attribute]
+    pub name: Option<String>,
+
+    #[attribute]
+    pub sid: Option<String>,
+
+    #[attribute]
+    #[name = "type"]
+    pub data_type: Option<String>,
+
+    #[attribute]
+    pub semantic: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Polygon<'a> {
+    len: usize,
+    chunks: ::std::slice::Chunks<'a, usize>,
+}
+
+impl<'a> Polygon<'a> {
+    pub fn vertices(&self) -> ::std::slice::Chunks<'a, usize> {
+        self.chunks.clone()
+    }
+
+    /// Returns the number of vertices in this polygon.
+    pub fn len(&self) -> usize {
+        self.len
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polygons"]
 pub struct Polygons;
 
+/// A list of polygons that are not necessarily triangles.
+///
+/// Provides the information needed for a mesh to bind vertex attributes together and then
+/// organize those vertices into individual polygons.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polylist"]
-pub struct Polylist;
+pub struct Polylist {
+    /// A human-friendly name for this polylist.
+    ///
+    /// Has no semantic meaning.
+    #[attribute]
+    pub name: Option<String>,
+
+    /// The number of polygon primitives in the polylist.
+    #[attribute]
+    pub count: usize,
+
+    /// The name of the material associated with this polylist.
+    ///
+    /// This name is bound to a material at the time of instantiaion. See [`InstanceGeometry`]
+    /// and [`BindMaterial`].
+    ///
+    /// If `None`, then the lighting and shading results are appplication-defined.
+    ///
+    /// [`InstanceGeometry`]: ./struct.InstanceGeometry.html
+    /// [`BindMaterial`]: ./struct.BindMaterial.html
+    #[attribute]
+    pub material: Option<String>,
+
+    /// The input data for the polylist.
+    #[child]
+    pub inputs: Vec<SharedInput>,
+
+    /// A list of integers, each specifying the number of vertices for one polygon in the polylist.
+    #[child]
+    pub vcount: Option<VCount>,
+
+    /// A list of integers that specify the vertex attributes as indexes into the inputs.
+    #[child]
+    pub primitives: Option<Primitives>,
+
+    /// Arbitrary additional information about this polylist and the data it contains.
+    ///
+    /// For more information about 3rd-party extensions, see the
+    /// [crate-level documentation](../index.html#3rd-party-extensions).
+    #[child]
+    pub extras: Vec<Extra>,
+}
+
+impl Polylist {
+    /// Returns an iterator over the polygons in the polylist.
+    pub fn iter<'a>(&'a self) -> PolylistIter<'a> {
+        // Determine the number of indices that are used for each vertex. Generally, we expect this to
+        // be the same as the number of inputs (e.g. if there's an input for position and an input
+        // for normal, then we'd expect there to be 2 indices for each vertex), but the COLLADA spec
+        // allows multiple inputs to share an offset, effectively reducing the number of indices
+        // needed for each vertex. To account for this, we look for the largest offset used by the
+        // inputs, which should tell us consistently how many unique offsets there are.
+        // TODO: How do we handle a polylist with no inputs? Probably return no polygons.
+        let largest_offset = self.inputs.iter()
+            .map(|input| input.offset)
+            .max()
+            .unwrap();
+
+        PolylistIter {
+            polylist: self,
+            num_indices_per_vertex: largest_offset + 1,
+            vcount_iter: self.vcount.as_ref().unwrap().iter(),
+            verts_so_far: 0,
+        }
+    }
+
+    /// Returns the number of polygons in the polylist.
+    pub fn len(&self) -> usize {
+        self.count
+    }
+}
+
+pub struct PolylistIter<'a> {
+    polylist: &'a Polylist,
+    num_indices_per_vertex: usize,
+    vcount_iter: ::std::slice::Iter<'a, usize>,
+    verts_so_far: usize,
+}
+
+impl<'a> ::std::iter::Iterator for PolylistIter<'a> {
+    type Item = Polygon<'a>;
+
+    fn next(&mut self) -> Option<Polygon<'a>> {
+        let primitives = match self.polylist.primitives {
+            Some(ref primitives) => primitives,
+            None => return None,
+        };
+
+        self.vcount_iter.next()
+            .map(|&num_verts| {
+                let indices = &primitives[self.verts_so_far * self.num_indices_per_vertex .. (self.verts_so_far + num_verts) * self.num_indices_per_vertex];
+                self.verts_so_far += num_verts;
+                Polygon {
+                    len: num_verts,
+                    chunks: indices.chunks(self.num_indices_per_vertex),
+                }
+            })
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 pub enum Primitive {
@@ -554,9 +708,47 @@ pub enum Primitive {
     Tristrips(Tristrips),
 }
 
+impl Primitive {
+    pub fn as_polylist(&self) -> Option<&Polylist> {
+        match *self {
+            Primitive::Polylist(ref polylist) => Some(polylist),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "p"]
+pub struct Primitives {
+    #[text]
+    data: Vec<usize>,
+}
+
+impl ::std::ops::Deref for Primitives {
+    type Target = [usize];
+
+    fn deref(&self) -> &[usize] { &*self.data }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "scene"]
 pub struct Scene;
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "input"]
+pub struct SharedInput {
+    #[attribute]
+    pub offset: usize,
+
+    #[attribute]
+    pub semantic: String,
+
+    #[attribute]
+    pub source: UriFragment,
+
+    #[attribute]
+    pub set: Option<usize>,
+}
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "source"]
@@ -604,5 +796,41 @@ pub struct Trifans;
 pub struct Tristrips;
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "input"]
+pub struct UnsharedInput {
+    #[attribute]
+    pub semantic: String,
+
+    #[attribute]
+    pub source: UriFragment,
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
+#[name = "vcount"]
+pub struct VCount {
+    #[text]
+    data: Vec<usize>,
+}
+
+impl ::std::ops::Deref for VCount {
+    type Target = [usize];
+
+    fn deref(&self) -> &[usize] { &*self.data }
+}
+
+#[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "vertices"]
-pub struct Vertices;
+pub struct Vertices {
+    #[attribute]
+    pub id: String,
+
+    #[attribute]
+    pub name: Option<String>,
+
+    #[child]
+    #[required]
+    pub inputs: Vec<UnsharedInput>,
+
+    #[child]
+    pub extras: Vec<Extra>,
+}

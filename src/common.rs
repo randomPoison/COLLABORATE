@@ -16,12 +16,6 @@ use xml::reader::{EventReader, XmlEvent};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnyUri(String);
 
-impl From<String> for AnyUri {
-    fn from(from: String) -> AnyUri {
-        AnyUri(from)
-    }
-}
-
 // TODO: Actually parse the string and verify that it's a valid URI.
 impl ::std::str::FromStr for AnyUri {
     type Err = ::std::string::ParseError;
@@ -109,7 +103,17 @@ impl ColladaElement for Technique {
             match &*attribute.name.local_name {
                 "profile" => { profile = Some(attribute.value); }
 
-                "xmlns" => { xmlns = Some(attribute.value.into()); }
+                "xmlns" => {
+                    xmlns = Some(
+                        attribute.value.parse::<AnyUri>()
+                            .map_err(|err| {
+                                Error {
+                                    position: reader.position(),
+                                    kind: err.into(),
+                                }
+                            })?
+                    );
+                }
 
                 _ => {
                     return Err(Error {
@@ -259,4 +263,16 @@ impl ColladaElement for UpAxis {
 
 impl Default for UpAxis {
     fn default() -> UpAxis { UpAxis::Y }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UriFragment(String);
+
+// TODO: Actually parse the string and verify that it's a valid URI fragment.
+impl ::std::str::FromStr for UriFragment {
+    type Err = ::std::string::ParseError;
+
+    fn from_str(string: &str) -> ::std::result::Result<UriFragment, ::std::string::ParseError> {
+        Ok(UriFragment(string.into()))
+    }
 }
