@@ -587,6 +587,24 @@ impl<'a> Polygon<'a> {
     }
 }
 
+impl<'a> ::std::iter::IntoIterator for Polygon<'a> {
+    type Item = &'a [usize];
+    type IntoIter = ::std::slice::Chunks<'a, usize>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.chunks
+    }
+}
+
+impl<'a> ::std::iter::IntoIterator for &'a Polygon<'a> {
+    type Item = &'a [usize];
+    type IntoIter = ::std::slice::Chunks<'a, usize>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.vertices()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polygons"]
 pub struct Polygons;
@@ -594,7 +612,29 @@ pub struct Polygons;
 /// A list of polygons that are not necessarily triangles.
 ///
 /// Provides the information needed for a mesh to bind vertex attributes together and then
-/// organize those vertices into individual polygons.
+/// organize those vertices into individual polygons. `Polylist` provides functionality for
+/// iterating over the polygons it represents.
+///
+/// # Examples
+///
+/// Iterate over all of the polygons in a polylist, then iterate over each vertex in each polygon:
+///
+/// ```
+/// # #![allow(unused_variables)]
+/// # use std::fs::File;
+/// # use collaborate::v1_4::Collada;
+/// # let file = File::open("resources/blender_cube.dae").unwrap();
+/// # let document = Collada::read(file).unwrap();
+/// # let library = document.libraries[5].as_library_geometries().unwrap();
+/// # let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+/// let polylist = mesh.primitives[0].as_polylist().unwrap();
+/// for polygon in polylist {
+///     println!("Vertices in polygon: {}", polygon.len());
+///     for vertex in polygon {
+///         println!("{:?}", vertex);
+///     }
+/// }
+/// ```
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "polylist"]
 pub struct Polylist {
@@ -666,6 +706,15 @@ impl Polylist {
     /// Returns the number of polygons in the polylist.
     pub fn len(&self) -> usize {
         self.count
+    }
+}
+
+impl<'a> ::std::iter::IntoIterator for &'a Polylist {
+    type Item = Polygon<'a>;
+    type IntoIter = PolylistIter<'a>;
+
+    fn into_iter(self) -> PolylistIter<'a> {
+        self.iter()
     }
 }
 
@@ -816,6 +865,11 @@ impl ::std::ops::Deref for VCount {
     type Target = [usize];
 
     fn deref(&self) -> &[usize] { &*self.data }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vertex<'a> {
+    attributes: &'a [usize],
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
