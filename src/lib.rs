@@ -95,6 +95,7 @@ extern crate xml;
 pub use xml::common::TextPosition;
 pub use xml::reader::{Error as XmlError, XmlEvent};
 
+use common::UriFragmentParseError;
 use std::fmt::{self, Display, Formatter};
 use std::io::Read;
 use std::num::{ParseFloatError, ParseIntError};
@@ -432,6 +433,9 @@ pub enum ErrorKind {
         version: String,
     },
 
+    /// There was an invalid URI fragment in the document.
+    UriFragmentParseError(UriFragmentParseError),
+
     /// The XML in the document was malformed in some way.
     ///
     /// Not much more to say about this one ¯\_(ツ)_/¯
@@ -462,6 +466,12 @@ impl From<::std::string::ParseError> for ErrorKind {
     }
 }
 
+impl From<UriFragmentParseError> for ErrorKind {
+    fn from(from: UriFragmentParseError) -> ErrorKind {
+        ErrorKind::UriFragmentParseError(from)
+    }
+}
+
 impl Display for ErrorKind {
     fn fmt(&self, formatter: &mut Formatter) -> ::std::result::Result<(), fmt::Error> {
         match *self {
@@ -486,15 +496,15 @@ impl Display for ErrorKind {
             }
 
             ErrorKind::ParseFloatError(ref error) => {
-                write!(formatter, "{}", error)
+                error.fmt(formatter)
             }
 
             ErrorKind::ParseIntError(ref error) => {
-                write!(formatter, "{}", error)
+                error.fmt(formatter)
             }
 
             ErrorKind::TimeError(ref error) => {
-                write!(formatter, "{}", error)
+                error.fmt(formatter)
             }
 
             ErrorKind::UnexpectedAttribute { ref element, ref attribute, ref expected } => {
@@ -531,6 +541,10 @@ impl Display for ErrorKind {
 
             ErrorKind::UnsupportedVersion { ref version } => {
                 write!(formatter, "Unsupported COLLADA version {:?}, supported versions are \"1.4.0\", \"1.4.1\", \"1.5.0\"", version)
+            }
+
+            ErrorKind::UriFragmentParseError(ref error) => {
+                error.fmt(formatter)
             }
 
             ErrorKind::XmlError(ref error) => {

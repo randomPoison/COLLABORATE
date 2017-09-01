@@ -144,25 +144,48 @@ impl Collada {
     }
 }
 
+/// Describes a stream of values from an array data source.
+///
+/// An accessor declares an access pattern into an array of source data. The arrays can be
+/// arranged in either an interleaved or noninterleaved manner, depending on the `offset` and
+/// `stride` values.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "accessor"]
 pub struct Accessor {
+    /// The number of times the array is accessed.
     #[attribute]
     pub count: usize,
 
+    /// The index of the first value to be read from the array.
     #[attribute]
     #[optional_with_default = "0"]
     pub offset: usize,
 
+    /// The location of the array to access.
+    ///
+    /// This may refer to a COLLADA array element or to an array data source outside the scope
+    /// of the instance document; The source does not need to be a COLLADA document.
     #[attribute]
     pub source: AnyUri,
 
+    /// The number of values that are to be considered a unit during each access to the array.
     #[attribute]
     #[optional_with_default = "1"]
     pub stride: usize,
 
     #[child]
     pub params: Vec<Param>,
+}
+
+impl Accessor {
+    /// Access a source array using the accessor.
+    ///
+    /// Returns a sub-slice of `array` containing the
+    pub fn access<'a, 'b, T>(&'a self, array: &'b [T], index: usize) -> &'b [T] {
+        let start = self.offset + self.stride * index;
+        let end = start + self.stride;
+        &array[start..end]
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
@@ -552,20 +575,38 @@ pub struct Mesh {
 #[name = "Name_array"]
 pub struct NameArray;
 
-
+/// Declares parametric information for its parent element.
+///
+/// A functional or programmatical format requires a means for users to specify parametric
+/// information. This information represents function parameter (argument) data.
+///
+/// Material shader programs may contain code representing vertex or pixel programs. These
+/// programs require parameters as part of their state information.
+///
+/// The basic declaration of a parameter describes the name, data type, and value data of the
+/// parameter. That parameter name identifies it to the function or program. The parameter type
+/// indicates the encoding of its value.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "param"]
 pub struct Param {
+    /// The name of the parameter.
     #[attribute]
     pub name: Option<String>,
 
+    /// The subidentifier of this parameter.
+    ///
+    /// This value is unique within the scope of the parent element.
     #[attribute]
     pub sid: Option<String>,
 
+    /// The type of the value data.
+    ///
+    /// Must be understood by the application consuming the COLLADA document.
     #[attribute]
     #[name = "type"]
     pub data_type: Option<String>,
 
+    /// The user-defined meaning of the parameter.
     #[attribute]
     pub semantic: Option<String>,
 }
@@ -783,18 +824,43 @@ impl ::std::ops::Deref for Primitives {
 #[name = "scene"]
 pub struct Scene;
 
+/// Declares the input semantic of a data source and connects a consumer of that source.
+///
+/// `SharedInput` declares the input connection to a data source that a consumer requires. A data
+/// source is a container of raw data that lacks semantic meaning, so that the data can be
+/// reused within the document. To use the data, a consumer declares a connection to it with the
+/// desired semantic information.
+///
+/// In COLLADA, all inputs are driven by index values. A consumer samples an input by supplying
+/// an index value to an input. Some consumers have multiple inputs that can share the same index
+/// values. Inputs that have the same `offset` value are driven by the same index value from the
+/// consumer. This is an optimization that reduces the total number of indexes that the consumer
+/// must store. These inputs are described in this section as shared inputs but otherwise
+/// operate in the same manner as unshared inputs.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "input"]
 pub struct SharedInput {
+    /// The offset into the list of indices provided by the parent object.
+    ///
+    /// If two `SharedInput` instances share the same `offset` value, they are indexed the same.
+    /// This is a simple form of compression for the list of indices and also defines the order
+    /// in which inputs are used.
     #[attribute]
     pub offset: usize,
 
+    /// The user-defined meaning of the input connnection.
+    ///
+    /// See the type-level documentation for a list of common semantic values.
     #[attribute]
     pub semantic: String,
 
+    /// The location of the data source.
     #[attribute]
     pub source: UriFragment,
 
+    /// Which inputs to group as a single set.
+    ///
+    /// This is helpful when multiple inputs share the same semantic.
     #[attribute]
     pub set: Option<usize>,
 }
@@ -819,6 +885,15 @@ pub struct Source {
 
     #[child]
     pub techniques: Vec<Technique>,
+}
+
+impl Source {
+    // Returns the [`Accessor`] in the source's `technique_common` member.
+    pub fn common_accessor(&self) -> Option<&Accessor> {
+        self.technique_common
+            .as_ref()
+            .map(|technique| &technique.accessor)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
