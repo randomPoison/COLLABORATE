@@ -947,6 +947,10 @@ pub struct Vertex<'a> {
     attributes: &'a [usize],
 }
 
+/// Declares the attributes and identity of mesh-vertices.
+///
+/// Mesh-vertices represent the position (identity) of the vertices comprising the mesh and other
+/// that are invariant to tessellation.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "vertices"]
 pub struct Vertices {
