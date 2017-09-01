@@ -358,6 +358,36 @@ impl GeometricElement {
 }
 
 /// Describes the visual shape and appearance of an object in a scene.
+///
+/// The primary purpose of `Geometry` is to provide access to a [`GeometricElement`], via its
+/// `geographic_element` member. It contains miscellaneous additional data, such as asset
+/// metadata, but otherwise does not directly contain any geometric data.
+///
+/// # Examples
+///
+/// ```
+/// # use ::collaborate::v1_4::*;
+/// # static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+/// # let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+/// # let document = Collada::from_str(&*source).unwrap();
+/// # let library_geometries = document.libraries[5].as_library_geometries().unwrap();
+/// let geometry = &library_geometries.geometries[0];
+/// match geometry.geometric_element {
+///     GeometricElement::ConvexMesh(ref mesh) => {
+///         // Do something with `mesh`.
+///     }
+///
+///     GeometricElement::Mesh(ref mesh) => {
+///         // Do something with `mesh`.
+///     }
+///
+///     GeometricElement::Spline(ref spline) => {
+///         // Do something with `spline`.
+///     }
+/// }
+/// ```
+///
+/// [`GeometricElement`]: ./enum.GeometricElement.html
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "geometry"]
 pub struct Geometry {
