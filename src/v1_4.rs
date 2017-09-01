@@ -349,9 +349,86 @@ pub enum GeometricElement {
 }
 
 impl GeometricElement {
+    /// Attempts to downcast the geometric element to a [`ConvexMesh`].
+    ///
+    /// Returns a reference to the inner [`ConvexMesh`] if there is one, returns `None` otherwise.
+    /// This is useful if you have a `GeometricElement` but only want to use it if it represents a
+    /// [`ConvexMesh`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ::collaborate::v1_4::*;
+    /// # static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+    /// # let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    /// # let document = Collada::from_str(&*source).unwrap();
+    /// # let library_geometries = document.libraries[5].as_library_geometries().unwrap();
+    /// let geometry = &library_geometries.geometries[0];
+    /// if let Some(mesh) = geometry.geometric_element.as_convex_mesh() {
+    ///     // Do something with `mesh`.
+    /// }
+    /// ```
+    ///
+    /// [`ConvexMesh`]: ./struct.ConvexMesh.html
+    pub fn as_convex_mesh(&self) -> Option<&ConvexMesh> {
+        match *self {
+            GeometricElement::ConvexMesh(ref mesh) => Some(mesh),
+            _ => None,
+        }
+    }
+
+    /// Attempts to downcast the geometric element to a [`Mesh`].
+    ///
+    /// Returns a reference to the inner [`Mesh`] if there is one, returns `None` otherwise. This
+    /// is useful if you have a `GeometricElement` but only want to use it if it represents a
+    /// [`Mesh`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ::collaborate::v1_4::*;
+    /// # static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+    /// # let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    /// # let document = Collada::from_str(&*source).unwrap();
+    /// # let library_geometries = document.libraries[5].as_library_geometries().unwrap();
+    /// let geometry = &library_geometries.geometries[0];
+    /// if let Some(mesh) = geometry.geometric_element.as_mesh() {
+    ///     // Do something with `mesh`.
+    /// }
+    /// ```
+    ///
+    /// [`Mesh`]: ./struct.Mesh.html
     pub fn as_mesh(&self) -> Option<&Mesh> {
         match *self {
             GeometricElement::Mesh(ref mesh) => Some(mesh),
+            _ => None,
+        }
+    }
+
+    /// Attempts to downcast the geometric element to a [`Spline`].
+    ///
+    /// Returns a reference to the inner [`Spline`] if there is one, returns `None` otherwise. This
+    /// is useful if you have a `GeometricElement` but only want to use it if it represents a
+    /// [`Spline`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use ::collaborate::v1_4::*;
+    /// # static TEST_DOCUMENT: &'static [u8] = include_bytes!("../resources/blender_cube.dae");
+    /// # let source = String::from_utf8(TEST_DOCUMENT.into()).unwrap();
+    /// # let document = Collada::from_str(&*source).unwrap();
+    /// # let library_geometries = document.libraries[5].as_library_geometries().unwrap();
+    /// let geometry = &library_geometries.geometries[0];
+    /// if let Some(spline) = geometry.geometric_element.as_spline() {
+    ///     // Do something with `spline`.
+    /// }
+    /// ```
+    ///
+    /// [`Spline`]: ./struct.Spline.html
+    pub fn as_spline(&self) -> Option<&Spline> {
+        match *self {
+            GeometricElement::Spline(ref mesh) => Some(mesh),
             _ => None,
         }
     }
