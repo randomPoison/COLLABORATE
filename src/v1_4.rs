@@ -954,6 +954,34 @@ pub struct Scene;
 /// consumer. This is an optimization that reduces the total number of indexes that the consumer
 /// must store. These inputs are described in this section as shared inputs but otherwise
 /// operate in the same manner as unshared inputs.
+///
+/// # Common Semantics
+///
+/// | Value of `semantic` | Description                                                |
+/// | ------------------- | ---------------------------------------------------------- |
+/// | `"BINORMAL"`        | Geometric binormal (bitangent) vector.                     |
+/// | `"COLOR"`           | Color coordinate vector. Color inputs are RGB.             |
+/// | `"CONTINUITY"`      | Continuity constraint at the control vertex (CV). See also "Curve Interpolation" in Chapter 4 of the COLLADA spec.    |
+/// | `"IMAGE"`           | Raster or MIP-level input.                                 |
+/// | `"INPUT"`           | Sampler input. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"IN_TANGENT"`      | Tangent vector for preceding control point. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"INTERPOLATION"`   | Sampler interpolation type. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"INV_BIND_MATRIX"` | Inverse of location-to-world matrix.                       |
+/// | `"JOIN"`            | Skin influence identifier.                                 |
+/// | `"LINEAR_STEPS"`    | Number of piece-wise linear approximation steps to use for the spline segment that follows this CV. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"MORPH_TARGET"`    | Morph targets for mesh morphing.                           |
+/// | `"MORPH_WEIGHT"`    | Weights for mesh morphing.                                 |
+/// | `"NORMAL"`          | Normal vector.                                             |
+/// | `"OUTPUT"`          | Sampler output. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"OUT_TANGENT"`     | Tangent vector for succeeding control point. See also "Curve Interpolation" in Chapter 4 fo the COLLADA spec. |
+/// | `"POSITION"`        | Geometric coordinate vector. See also "Curve Interpolation" in Chapter 4 of the COLLADA spec. |
+/// | `"TANGENT"`         | Geometric tangent vector.                                  |
+/// | `"TEXBINORMAL"`     | Texture binormal (bitangent) vector.                       |
+/// | `"TEXCOORD"`        | Texture coordinate vector.                                 |
+/// | `"TEXTANGENT"`      | Texture tangent vector.                                    |
+/// | `"UV"`              | Generic parameter vector.                                  |
+/// | `"VERTEX"`          | Mesh vertex.                                               |
+/// | `"WEIGHT"`          | Skin influence weighting value.                            |
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "input"]
 pub struct SharedInput {
@@ -967,7 +995,7 @@ pub struct SharedInput {
 
     /// The user-defined meaning of the input connnection.
     ///
-    /// See the type-level documentation for a list of common semantic values.
+    /// See the type-level documentation for a [list of common semantic values](#common-semantics).
     #[attribute]
     pub semantic: String,
 
