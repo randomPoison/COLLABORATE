@@ -31,12 +31,10 @@ fn main() {
 
             // For each of the attributes in the vertex, find the correct input and then grab
             // the vertex data.
-            // TODO: Should the vetex iter also specify the offset of each attribute? You always
-            // need that info, as far as I can tell.
-            for (offset, &attribute_index) in vertex.iter().enumerate() {
+            for attribute in vertex {
                 // TODO: Provide a helper method `inputs_for_offset` to make this less verbose.
                 // Doing so is a pain to implement without impl Trait syntax.
-                for input in polylist.inputs.iter().filter(|input| input.offset == offset) {
+                for input in polylist.inputs.iter().filter(|input| input.offset == attribute.offset) {
                     // Handle the input based on its semantic.
                     match input.semantic.as_ref() {
                         "VERTEX" => {
@@ -73,7 +71,7 @@ fn main() {
                                 .expect("Source wasn't a float array");
 
                             /// Use the accessor to get the position data for the current vertex.
-                            let position_data = accessor.access(array.data.as_ref(), attribute_index);
+                            let position_data = accessor.access(array.data.as_ref(), attribute.index);
 
                             // Use the `params` in the accesor to determine which elements in
                             // `normal_data` correspond to the normal's X, Y, and Z components.
@@ -115,7 +113,7 @@ fn main() {
                                 .expect("Source wasn't a float array");
 
                             /// Use the accessor to get the normal data for the current vertex.
-                            let normal_data = accessor.access(array.data.as_ref(), attribute_index);
+                            let normal_data = accessor.access(array.data.as_ref(), attribute.index);
 
                             // Use the `params` in the accesor to determine which elements in
                             // `normal_data` correspond to the normal's X, Y, and Z components.

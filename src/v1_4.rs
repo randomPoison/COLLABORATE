@@ -735,8 +735,8 @@ pub struct Polygon<'a> {
 }
 
 impl<'a> Polygon<'a> {
-    pub fn vertices(&self) -> ::std::slice::Chunks<'a, usize> {
-        self.chunks.clone()
+    pub fn iter(&self) -> PolygonIter<'a> {
+        PolygonIter { chunks: self.chunks.clone() }
     }
 
     /// Returns the number of vertices in this polygon.
@@ -746,20 +746,32 @@ impl<'a> Polygon<'a> {
 }
 
 impl<'a> ::std::iter::IntoIterator for Polygon<'a> {
-    type Item = &'a [usize];
-    type IntoIter = ::std::slice::Chunks<'a, usize>;
+    type Item = Vertex<'a>;
+    type IntoIter = PolygonIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.chunks
+        PolygonIter { chunks: self.chunks }
     }
 }
 
 impl<'a> ::std::iter::IntoIterator for &'a Polygon<'a> {
-    type Item = &'a [usize];
-    type IntoIter = ::std::slice::Chunks<'a, usize>;
+    type Item = Vertex<'a>;
+    type IntoIter = PolygonIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.vertices()
+        PolygonIter { chunks: self.chunks.clone() }
+    }
+}
+
+pub struct PolygonIter<'a> {
+    chunks: ::std::slice::Chunks<'a, usize>,
+}
+
+impl<'a> ::std::iter::Iterator for PolygonIter<'a> {
+    type Item = Vertex<'a>;
+
+    fn next(&mut self) -> Option<Vertex<'a>> {
+        self.chunks.next().map(|attributes| Vertex { attributes })
     }
 }
 
@@ -1106,9 +1118,86 @@ impl ::std::ops::Deref for VCount {
     fn deref(&self) -> &[usize] { &*self.data }
 }
 
+/// A single vertex in a polygon.
+///
+/// A vertex is composed of one or more attributes. You can use `Vertex` to iterate over a list
+/// of [`VertexAttribute`] objects representing the attributes.
+///
+/// # Examples
+///
+/// ```
+/// # #![allow(unused_variables)]
+/// # use std::fs::File;
+/// # use collaborate::v1_4::Collada;
+/// # let file = File::open("resources/blender_cube.dae").unwrap();
+/// # let document = Collada::read(file).unwrap();
+/// # let library = document.libraries[5].as_library_geometries().unwrap();
+/// # let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+/// let polylist = mesh.primitives[0].as_polylist().unwrap();
+/// for polygon in polylist {
+///     for vertex in polygon {
+///         for attribute in vertex {
+///             println!(
+///                 "Input offset: {}, attribute index: {}",
+///                 attribute.offset,
+///                 attribute.index,
+///             );
+///         }
+///     }
+/// }
+/// ```
+///
+/// [`VertexAttribute`]: ./struct.VertexAttribute.html
 #[derive(Debug, Clone, PartialEq)]
 pub struct Vertex<'a> {
     attributes: &'a [usize],
+}
+
+impl<'a> Vertex<'a> {
+    pub fn iter(&self) -> VertexIter<'a> {
+        VertexIter {
+            iter: self.attributes.iter(),
+            offset: 0,
+        }
+    }
+}
+
+impl<'a> ::std::iter::IntoIterator for Vertex<'a> {
+    type Item = VertexAttribute;
+    type IntoIter = VertexIter<'a>;
+
+    fn into_iter(self) -> VertexIter<'a> { self.iter() }
+}
+
+impl<'a> ::std::iter::IntoIterator for &'a Vertex<'a> {
+    type Item = VertexAttribute;
+    type IntoIter = VertexIter<'a>;
+
+    fn into_iter(self) -> VertexIter<'a> { self.iter() }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VertexAttribute {
+    pub index: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct VertexIter<'a> {
+    iter: ::std::slice::Iter<'a, usize>,
+    offset: usize,
+}
+
+impl<'a> ::std::iter::Iterator for VertexIter<'a> {
+    type Item = VertexAttribute;
+
+    fn next(&mut self) -> Option<VertexAttribute> {
+        self.iter.next().map(|&index| {
+            let attribute = VertexAttribute { index, offset: self.offset };
+            self.offset += 1;
+            attribute
+        })
+    }
 }
 
 /// Declares the attributes and identity of mesh-vertices.
