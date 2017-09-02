@@ -659,14 +659,24 @@ pub struct Linestrips;
 pub struct Mesh {
     /// One or more [`Source`] instances containing the raw mesh data.
     ///
+    /// These contain the raw data used to specify the vertex attributes of the vertices in the
+    /// mesh. The primitives in `primitives` will index into these sources to specify the mesh.
+    ///
     /// [`Source`]: ./struct.Source.html
     #[child]
     #[required]
     pub sources: Vec<Source>,
 
+    /// Describes the mesh's vertex attributes.
+    ///
+    /// `vertices` will have the [`UnsharedInput`] which specifies the "POSITION" attribute for
+    /// the mesh's vertices. It may also specify other mesh attributes.
+    ///
+    /// [`UnsharedInput`]: ./struct.UnsharedInput.html
     #[child]
     pub vertices: Vertices,
 
+    /// Geometric primitives that assemble values from the inputs into vertex attribute data.
     #[child]
     pub primitives: Vec<Primitive>,
 
