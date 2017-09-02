@@ -1114,20 +1114,29 @@ pub struct Vertex<'a> {
 /// Declares the attributes and identity of mesh-vertices.
 ///
 /// Mesh-vertices represent the position (identity) of the vertices comprising the mesh and other
-/// that are invariant to tessellation.
+/// vertex attributes that are invariant to tessellation.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "vertices"]
 pub struct Vertices {
+    /// A unique identifier of the vertices instance.
+    ///
+    /// This value is unique within the document.
     #[attribute]
     pub id: String,
 
+    /// The name of the vertices instance.
     #[attribute]
     pub name: Option<String>,
 
+    /// The input data for the vertices.
+    ///
+    /// There will be at least one element in `inputs`, and one input will specify the
+    /// `"POSITION"` semantic.
     #[child]
     #[required]
     pub inputs: Vec<UnsharedInput>,
 
+    /// Arbitrary additional data about the vertices.
     #[child]
     pub extras: Vec<Extra>,
 }
