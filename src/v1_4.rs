@@ -1036,12 +1036,31 @@ pub struct Trifans;
 #[name = "tristrips"]
 pub struct Tristrips;
 
+/// Declares the input semantic of a data source and connects a consumer of that source.
+///
+/// Declares the input connection to a data source that a consumer requires. A data
+/// source is a container of raw data that lacks semantic meaning, so that the data can be
+/// reused within the document. To use the data, a consumer declares a connection to it with the
+/// desired semantic information.
+///
+/// In COLLADA, all inputs are driven by index values. A consumer samples an input by supplying
+/// an index value to an input. Some consumers have multiple inputs that can share the same index
+/// values. Inputs that have the same `offset` value are driven by the same index value from the
+/// consumer. This is an optimization that reduces the total number of indexes that the consumer
+/// must store. These inputs are described in this section as shared inputs but otherwise
+/// operate in the same manner as unshared inputs.
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "input"]
 pub struct UnsharedInput {
+    /// The user-defined meaning of the input connnection.
+    ///
+    /// See [`SharedInput`] for a list of common semantic values.
+    ///
+    /// [`SharedInput`]: ./struct.SharedInput.html
     #[attribute]
     pub semantic: String,
 
+    /// The location of the data source.
     #[attribute]
     pub source: UriFragment,
 }
