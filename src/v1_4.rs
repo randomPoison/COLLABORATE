@@ -1121,7 +1121,7 @@ impl ::std::ops::Deref for VCount {
 /// A single vertex in a polygon.
 ///
 /// A vertex is composed of one or more attributes. You can use `Vertex` to iterate over a list
-/// of [`VertexAttribute`] objects representing the attributes.
+/// of [`VertexAttribute`] objects representing the attributes of the vertex.
 ///
 /// # Examples
 ///
@@ -1154,6 +1154,25 @@ pub struct Vertex<'a> {
 }
 
 impl<'a> Vertex<'a> {
+    /// Returns an iterator over the attributes in the vertex.
+    ///
+    /// # Examples
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// # use std::fs::File;
+    /// # use collaborate::v1_4::*;
+    /// # let file = File::open("resources/blender_cube.dae").unwrap();
+    /// # let document = Collada::read(file).unwrap();
+    /// # let library = document.libraries[5].as_library_geometries().unwrap();
+    /// # let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+    /// # let polylist = mesh.primitives[0].as_polylist().unwrap();
+    /// # let polygon = polylist.iter().next().unwrap();
+    /// let vertex = polygon.iter().next().unwrap();
+    /// let mut iter = vertex.iter();
+    /// assert_eq!(Some(VertexAttribute { index: 0, offset: 0 }), iter.next());
+    /// assert_eq!(Some(VertexAttribute { index: 0, offset: 1 }), iter.next());
+    /// assert_eq!(None, iter.next());
+    /// ```
     pub fn iter(&self) -> VertexIter<'a> {
         VertexIter {
             iter: self.attributes.iter(),
