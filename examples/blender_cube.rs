@@ -58,8 +58,7 @@ fn main() {
 
                             // Find the mesh source identified by the input's `source` within the
                             // parent `Mesh` object.
-                            let source = mesh.sources.iter()
-                                .find(|source| source.id == input.source.id())
+                            let source = mesh.find_source(input.source.id())
                                 .expect("Didn't find a source with a matching ID in the parent mesh");
 
                             // Retrieve the source's accessor and raw float array. We only support
@@ -100,8 +99,7 @@ fn main() {
                         "NORMAL" => {
                             // Find the mesh source identified by the input's `source` within the
                             // parent `Mesh` object.
-                            let source = mesh.sources.iter()
-                                .find(|source| source.id == input.source.id())
+                            let source = mesh.find_source(input.source.id())
                                 .expect("Didn't find a source with a matching ID in the parent mesh");
 
                             // Retrieve the source's accessor and raw float array. We only support

@@ -708,6 +708,27 @@ pub struct Mesh {
     pub extras: Vec<Extra>,
 }
 
+impl Mesh {
+    /// Returns the source which matches `id`, or `None` if no sources match.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// # use std::fs::File;
+    /// # use collaborate::v1_4::Collada;
+    /// # let file = File::open("resources/blender_cube.dae").unwrap();
+    /// # let document = Collada::read(file).unwrap();
+    /// # let library = document.libraries[5].as_library_geometries().unwrap();
+    /// let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+    /// let positions_source = mesh.find_source("Cube-mesh-positions");
+    /// assert!(positions_source.is_some());
+    /// ```
+    pub fn find_source<'a>(&'a self, id: &str) -> Option<&'a Source> {
+        self.sources.iter().find(|source| source.id == id)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "Name_array"]
 pub struct NameArray;
