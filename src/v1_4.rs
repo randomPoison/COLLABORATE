@@ -500,6 +500,26 @@ pub struct Geometry {
 #[name = "IDREF_array"]
 pub struct IdrefArray;
 
+#[derive(Debug, Clone)]
+pub struct InputsForOffset<'a> {
+    inputs: ::std::slice::Iter<'a, SharedInput>,
+    offset: usize,
+}
+
+impl<'a> Iterator for InputsForOffset<'a> {
+    type Item = &'a SharedInput;
+
+    fn next(&mut self) -> Option<&'a SharedInput> {
+        while let Some(input) = self.inputs.next() {
+            if input.offset == self.offset {
+                return Some(input);
+            }
+        }
+
+        None
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "int_array"]
 pub struct IntArray;
@@ -802,6 +822,15 @@ pub struct Polygons;
 ///     println!("Vertices in polygon: {}", polygon.len());
 ///     for vertex in polygon {
 ///         println!("{:?}", vertex);
+///         for attribute in vertex {
+///             for input in polylist.inputs_for_offset(attribute.offset) {
+///                 println!(
+///                     "Attribute {:?} indexes into {:?}",
+///                     attribute,
+///                     input,
+///                 );
+///             }
+///         }
 ///     }
 /// }
 /// ```
@@ -876,6 +905,46 @@ impl Polylist {
     /// Returns the number of polygons in the polylist.
     pub fn len(&self) -> usize {
         self.count
+    }
+
+    /// Returns an iterator yielding all inputs that match `offset`.
+    ///
+    /// When matching a vertex attribute to an input, the attribute's offset is matched against
+    /// the input's offset. It's possible for multiple inputs to share the same offset, so this
+    /// method provides an easy way to iterate over all inputs with a given offset.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// # use std::fs::File;
+    /// # use collaborate::v1_4::Collada;
+    /// # let file = File::open("resources/blender_cube.dae").unwrap();
+    /// # let document = Collada::read(file).unwrap();
+    /// # let library = document.libraries[5].as_library_geometries().unwrap();
+    /// # let mesh = library.geometries[0].geometric_element.as_mesh().unwrap();
+    /// let polylist = mesh.primitives[0].as_polylist().unwrap();
+    /// for polygon in polylist {
+    ///     println!("Vertices in polygon: {}", polygon.len());
+    ///     for vertex in polygon {
+    ///         println!("{:?}", vertex);
+    ///         for attribute in vertex {
+    ///             for input in polylist.inputs_for_offset(attribute.offset) {
+    ///                 println!(
+    ///                     "Attribute {:?} indexes into {:?}",
+    ///                     attribute,
+    ///                     input,
+    ///                 );
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn inputs_for_offset<'a>(&'a self, offset: usize) -> InputsForOffset<'a> {
+        InputsForOffset {
+            inputs: self.inputs.iter(),
+            offset,
+        }
     }
 }
 

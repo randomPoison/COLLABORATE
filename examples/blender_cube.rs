@@ -32,9 +32,9 @@ fn main() {
             // For each of the attributes in the vertex, find the correct input and then grab
             // the vertex data.
             for attribute in vertex {
-                // TODO: Provide a helper method `inputs_for_offset` to make this less verbose.
-                // Doing so is a pain to implement without impl Trait syntax.
-                for input in polylist.inputs.iter().filter(|input| input.offset == attribute.offset) {
+
+                // Retrieve the raw data for each attribute that matches the attribute's offset.
+                for input in polylist.inputs_for_offset(attribute.offset) {
                     // Handle the input based on its semantic.
                     match input.semantic.as_ref() {
                         "VERTEX" => {
