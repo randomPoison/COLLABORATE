@@ -1195,9 +1195,23 @@ impl<'a> ::std::iter::IntoIterator for &'a Vertex<'a> {
     fn into_iter(self) -> VertexIter<'a> { self.iter() }
 }
 
+/// Represents a single attribute of a vertex.
+///
+/// A vertex attribute has two properties:
+///
+/// * An offset, used to determine which input(s) this attribute references.
+/// * An index, which is used to index into the data specified by the referenced input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VertexAttribute {
+    /// The index within the relevant source array which has this attribute's value.
     pub index: usize,
+
+    /// The offset of the attribute.
+    ///
+    /// This value will match the `offset` member of one or more inputs ([`SharedInput`] or
+    /// [`UnsharedInput`]). If the attribute matches more than one input, then the attribute
+    /// indexes into all of the inputs it matches. Therefore, a single `VertexAttribute` can
+    /// map to multiple actual vertex attributes.
     pub offset: usize,
 }
 
