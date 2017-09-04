@@ -265,14 +265,44 @@ impl Default for UpAxis {
     fn default() -> UpAxis { UpAxis::Y }
 }
 
+/// Represents the final fragment portion of a URI.
+///
+/// Within the COLLADA spec, URI fragments are often used to allow one element to reference
+/// another element by its ID. You can use the [`id`] method to get the ID of the targeted
+/// element.
+///
+/// [`id`]: #method.id
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UriFragment(String);
 
-// TODO: Actually parse the string and verify that it's a valid URI fragment.
-impl ::std::str::FromStr for UriFragment {
-    type Err = ::std::string::ParseError;
+impl UriFragment {
+    /// Returns the ID that this fragment targets.
+    pub fn id(&self) -> &str { self.0.as_ref() }
+}
 
-    fn from_str(string: &str) -> ::std::result::Result<UriFragment, ::std::string::ParseError> {
-        Ok(UriFragment(string.into()))
+impl ::std::str::FromStr for UriFragment {
+    type Err = UriFragmentParseError;
+
+    fn from_str(string: &str) -> ::std::result::Result<UriFragment, Self::Err> {
+        if !string.starts_with("#") {
+            return Err(UriFragmentParseError);
+        }
+
+        Ok(UriFragment(string[1..].into()))
+    }
+}
+
+/// An error when parsing a [`UriFragment`].
+///
+/// The only way that parsing a [`UriFragment`] from a string can fail is if the string doesn't
+/// begin with "#". Since there is only one way to fail, this type carries no other information.
+///
+/// [`UriFragment`]: ./struct.UriFragment.html
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UriFragmentParseError;
+
+impl ::std::fmt::Display for UriFragmentParseError {
+    fn fmt(&self, formatter: &mut ::std::fmt::Formatter) -> ::std::result::Result<(), ::std::fmt::Error> {
+        write!(formatter, "URI fragment did not start with a leading \"#\"")
     }
 }

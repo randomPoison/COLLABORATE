@@ -420,135 +420,65 @@ fn polylist_iter() {
 
     let mut polygons = polylist.iter();
 
+    // Check first polygon.
     {
         let polygon = polygons.next().unwrap();
         assert_eq!(3, polygon.len());
 
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([0, 0].as_ref()), vertices.next());
-        assert_eq!(Some([2, 0].as_ref()), vertices.next());
-        assert_eq!(Some([3, 0].as_ref()), vertices.next());
+        let mut vertices = polygon.iter();
+
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 0, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 0, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
+
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 2, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 0, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
+
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 3, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 0, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
+
         assert_eq!(None, vertices.next());
     }
 
+    // Check last polygon.
     {
-        let polygon = polygons.next().unwrap();
+        let polygon = polygons.nth(10).unwrap();
         assert_eq!(3, polygon.len());
 
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([7, 1].as_ref()), vertices.next());
-        assert_eq!(Some([5, 1].as_ref()), vertices.next());
-        assert_eq!(Some([4, 1].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
+        let mut vertices = polygon.iter();
 
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 0, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 11, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
 
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([4, 2].as_ref()), vertices.next());
-        assert_eq!(Some([1, 2].as_ref()), vertices.next());
-        assert_eq!(Some([0, 2].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 3, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 11, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
 
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
+        {
+            let mut vertex = vertices.next().unwrap().iter();
+            assert_eq!(Some(VertexAttribute { index: 7, offset: 0 }), vertex.next());
+            assert_eq!(Some(VertexAttribute { index: 11, offset: 1 }), vertex.next());
+            assert_eq!(None, vertex.next());
+        }
 
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([5, 3].as_ref()), vertices.next());
-        assert_eq!(Some([2, 3].as_ref()), vertices.next());
-        assert_eq!(Some([1, 3].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([2, 4].as_ref()), vertices.next());
-        assert_eq!(Some([7, 4].as_ref()), vertices.next());
-        assert_eq!(Some([3, 4].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([0, 5].as_ref()), vertices.next());
-        assert_eq!(Some([7, 5].as_ref()), vertices.next());
-        assert_eq!(Some([4, 5].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([0, 6].as_ref()), vertices.next());
-        assert_eq!(Some([1, 6].as_ref()), vertices.next());
-        assert_eq!(Some([2, 6].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([7, 7].as_ref()), vertices.next());
-        assert_eq!(Some([6, 7].as_ref()), vertices.next());
-        assert_eq!(Some([5, 7].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([4, 8].as_ref()), vertices.next());
-        assert_eq!(Some([5, 8].as_ref()), vertices.next());
-        assert_eq!(Some([1, 8].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([5, 9].as_ref()), vertices.next());
-        assert_eq!(Some([6, 9].as_ref()), vertices.next());
-        assert_eq!(Some([2, 9].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([2, 10].as_ref()), vertices.next());
-        assert_eq!(Some([6, 10].as_ref()), vertices.next());
-        assert_eq!(Some([7, 10].as_ref()), vertices.next());
-        assert_eq!(None, vertices.next());
-    }
-
-    {
-        let polygon = polygons.next().unwrap();
-        assert_eq!(3, polygon.len());
-
-        let mut vertices = polygon.vertices();
-        assert_eq!(Some([0, 11].as_ref()), vertices.next());
-        assert_eq!(Some([3, 11].as_ref()), vertices.next());
-        assert_eq!(Some([7, 11].as_ref()), vertices.next());
         assert_eq!(None, vertices.next());
     }
 
