@@ -114,6 +114,25 @@ impl Collada {
         Self::parse(reader)
     }
 
+    /// Returns an iterator over all the libraries in the document.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #![allow(unused_variables)]
+    /// # use std::fs::File;
+    /// # use collaborate::v1_4::Collada;
+    /// # let file = File::open("resources/blender_cube.dae").unwrap();
+    /// let collada = Collada::read(file).unwrap();
+    /// for library in collada.libraries() {
+    ///     println!("Library: {:?}", library);
+    /// }
+    /// ```
+    ///
+    pub fn libraries<'a>(&'a self) -> ::std::slice::Iter<'a, Library> {
+        self.libraries.iter()
+    }
+
     /// Helper method that handles the bulk of the parsing work.
     ///
     /// `from_str` and `read` just create the `EventReader<R>` instance and then defer to `parse`.
