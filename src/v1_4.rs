@@ -639,6 +639,15 @@ pub struct LibraryGeometries {
     pub extras: Vec<Extra>,
 }
 
+impl LibraryGeometries {
+    /// Returns an iterator over all the [`Geometry`] objects contained in this library.
+    ///
+    /// [`Geometry`]: ./struct.Geometry.html
+    pub fn geometries<'a>(&'a self) -> ::std::slice::Iter<'a, Geometry> {
+        self.geometries.iter()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
 #[name = "library_images"]
 pub struct LibraryImages;
