@@ -755,6 +755,11 @@ impl Mesh {
     pub fn find_source<'a>(&'a self, id: &str) -> Option<&'a Source> {
         self.sources.iter().find(|source| source.id == id)
     }
+
+    /// Returns an iterator over the primitives in the mesh.
+    pub fn primitives<'a>(&'a self) -> ::std::slice::Iter<'a, Primitive> {
+        self.primitives.iter()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, ColladaElement)]
